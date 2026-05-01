@@ -3,6 +3,7 @@ import asyncio
 import logging
 import yt_dlp
 import json
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from pathlib import Path
@@ -73,80 +74,88 @@ def detect_platform(url):
     else:
         return "unknown"
 
-# دالة التحميل من Instagram باستخدام instagrapi
-async def download_instagram(url, mode="video"):
+# دالة التحميل من Instagram باستخدام معالجة متقدمة
+async def download_instagram_advanced(url, mode="video"):
     try:
-        from instagrapi import Client
+        # محاولة استخراج معرف الوسائط
+        media_id = None
         
-        client = Client()
-        
-        # استخراج معرف الوسائط من الرابط
         if "reel" in url:
-            media_id = re.search(r'/reel/([^/?]+)', url)
-            if media_id:
-                media_id = media_id.group(1)
-                media = await asyncio.to_thread(client.reel_info, media_id)
-                
-                # تحميل الفيديو
-                file_path = DOWNLOAD_DIR / f"reel_{media_id}.mp4"
-                video_url = media.video_url
-                
-                response = await asyncio.to_thread(
-                    lambda: __import__('requests').get(video_url, timeout=60)
-                )
-                
-                with open(file_path, 'wb') as f:
-                    f.write(response.content)
-                
-                return str(file_path), media.caption or "Reel"
-        
+            match = re.search(r'/reel/([^/?]+)', url)
+            if match:
+                media_id = match.group(1)
         elif "stories" in url:
-            user_id = re.search(r'/stories/([^/?]+)', url)
-            if user_id:
-                user_id = user_id.group(1)
-                stories = await asyncio.to_thread(client.user_stories, user_id)
-                
-                if stories:
-                    story = stories[0]
-                    file_path = DOWNLOAD_DIR / f"story_{user_id}.mp4"
-                    
-                    if story.video_url:
-                        response = await asyncio.to_thread(
-                            lambda: __import__('requests').get(story.video_url, timeout=60)
-                        )
-                    else:
-                        response = await asyncio.to_thread(
-                            lambda: __import__('requests').get(story.image_versions2.candidates[0].url, timeout=60)
-                        )
-                    
-                    with open(file_path, 'wb') as f:
-                        f.write(response.content)
-                    
-                    return str(file_path), "Story"
-        
+            match = re.search(r'/stories/([^/?]+)/(\d+)', url)
+            if match:
+                media_id = match.group(2)
         else:
-            # فيديو عادي
-            post_id = re.search(r'/p/([^/?]+)', url)
-            if post_id:
-                post_id = post_id.group(1)
-                media = await asyncio.to_thread(client.media_info, post_id)
-                
-                file_path = DOWNLOAD_DIR / f"post_{post_id}.mp4"
-                
-                if media.video_url:
-                    response = await asyncio.to_thread(
-                        lambda: __import__('requests').get(media.video_url, timeout=60)
-                    )
-                    
-                    with open(file_path, 'wb') as f:
-                        f.write(response.content)
-                    
-                    return str(file_path), media.caption or "Post"
+            match = re.search(r'/p/([^/?]+)', url)
+            if match:
+                media_id = match.group(1)
         
-        return None, "فشل استخراج المعرف من الرابط"
+        if not media_id:
+            return None, "فشل استخراج معرف الوسائط"
+        
+        # محاولة الحصول على بيانات الوسائط من Instagram API
+        headers = {
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Referer': 'https://www.instagram.com/',
+        }
+        
+        # محاولة الحصول على البيانات من Instagram
+        api_url = f"https://www.instagram.com/api/v1/media/{media_id}/info/"
+        
+        response = await asyncio.to_thread(
+            requests.get,
+            api_url,
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            media_data = data.get('media', {})
+            
+            # محاولة الحصول على الفيديو
+            if 'video_url' in media_data:
+                video_url = media_data['video_url']
+            elif 'carousel_media' in media_data:
+                # إذا كان carousel، خذ أول فيديو
+                for item in media_data['carousel_media']:
+                    if 'video_url' in item:
+                        video_url = item['video_url']
+                        break
+                else:
+                    return None, "لم يتم العثور على فيديو في الـ carousel"
+            else:
+                return None, "لم يتم العثور على فيديو"
+            
+            # تحميل الفيديو
+            file_path = DOWNLOAD_DIR / f"instagram_{media_id}.mp4"
+            
+            video_response = await asyncio.to_thread(
+                requests.get,
+                video_url,
+                headers=headers,
+                timeout=60,
+                stream=True
+            )
+            
+            if video_response.status_code == 200:
+                with open(file_path, 'wb') as f:
+                    for chunk in video_response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                title = media_data.get('caption', {}).get('text', 'Instagram Media')[:50]
+                return str(file_path), title
+        
+        return None, "فشل الحصول على بيانات الوسائط من Instagram"
         
     except Exception as e:
-        logger.error(f"Instagram download error: {e}")
+        logger.error(f"Instagram advanced download error: {e}")
         return None, str(e)
 
 # دالة التحميل باستخدام yt-dlp للمنصات الأخرى
@@ -218,12 +227,20 @@ async def download_content(url, mode="video", quality="best", retry=0):
         
         return None, error_msg
 
-# دالة موحدة للتحميل
+# دالة موحدة للتحميل مع fallback
 async def unified_download(url, mode="video", quality="best"):
     platform = detect_platform(url)
     
     if platform.startswith("instagram"):
-        return await download_instagram(url, mode)
+        # محاولة Instagram المتقدمة أولاً
+        file_path, result = await download_instagram_advanced(url, mode)
+        
+        # إذا فشلت، جرب yt-dlp كـ fallback
+        if not file_path:
+            logger.info(f"Instagram advanced failed, trying yt-dlp as fallback...")
+            file_path, result = await download_content(url, mode, quality)
+        
+        return file_path, result
     else:
         return await download_content(url, mode, quality)
 
@@ -268,9 +285,9 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🛠 **اختيار الجودة:** 1080p (فول) | 720p (عالية) | 480p (وسط) | أسرع جودة متوفرة.\n"
         "• 🔊 **دمج الصوت:** دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
         "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً - مو بوت ظيم.\n"
-        "• 🔄 **معالجة متقدمة:** instagrapi + yt-dlp للحل الموثوق 100%!\n\n"
+        "• 🔄 **معالجة متقدمة:** Instagram API + yt-dlp + Fallback Logic!\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 3.2 (بواسطة Manus AI + instagrapi + yt-dlp)\n\n"
+        "🚀 **الإصدار:** 3.3 (بواسطة Manus AI - Advanced Hybrid)\n\n"
         "⚠️ *ملاحظة: حبيبي استخدم البوت للاشياء المسموحة وتدلل علينا.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -375,5 +392,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started with instagrapi + yt-dlp (Reliable solution)...")
+    logger.info("Bot started with Instagram API + yt-dlp Hybrid (Advanced)...")
     application.run_polling()
