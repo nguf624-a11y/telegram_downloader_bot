@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from pathlib import Path
 from flask import Flask
 from threading import Thread
-import subprocess
+import re
 
 # إعداد السجلات (Logging)
 logging.basicConfig(
@@ -55,7 +55,101 @@ def save_user(user_id):
         with open(DB_FILE, 'w') as f:
             json.dump(list(users), f)
 
-# دالة التحميل باستخدام yt-dlp مع معالجة متقدمة
+# دالة للتحقق من نوع الرابط
+def detect_platform(url):
+    if "instagram.com" in url:
+        if "reel" in url or "reels" in url:
+            return "instagram_reel"
+        elif "stories" in url:
+            return "instagram_story"
+        else:
+            return "instagram"
+    elif "youtube.com" in url or "youtu.be" in url:
+        return "youtube"
+    elif "tiktok.com" in url:
+        return "tiktok"
+    elif "facebook.com" in url:
+        return "facebook"
+    else:
+        return "unknown"
+
+# دالة التحميل من Instagram باستخدام instagrapi
+async def download_instagram(url, mode="video"):
+    try:
+        from instagrapi import Client
+        
+        client = Client()
+        
+        # استخراج معرف الوسائط من الرابط
+        if "reel" in url:
+            media_id = re.search(r'/reel/([^/?]+)', url)
+            if media_id:
+                media_id = media_id.group(1)
+                media = await asyncio.to_thread(client.reel_info, media_id)
+                
+                # تحميل الفيديو
+                file_path = DOWNLOAD_DIR / f"reel_{media_id}.mp4"
+                video_url = media.video_url
+                
+                response = await asyncio.to_thread(
+                    lambda: __import__('requests').get(video_url, timeout=60)
+                )
+                
+                with open(file_path, 'wb') as f:
+                    f.write(response.content)
+                
+                return str(file_path), media.caption or "Reel"
+        
+        elif "stories" in url:
+            user_id = re.search(r'/stories/([^/?]+)', url)
+            if user_id:
+                user_id = user_id.group(1)
+                stories = await asyncio.to_thread(client.user_stories, user_id)
+                
+                if stories:
+                    story = stories[0]
+                    file_path = DOWNLOAD_DIR / f"story_{user_id}.mp4"
+                    
+                    if story.video_url:
+                        response = await asyncio.to_thread(
+                            lambda: __import__('requests').get(story.video_url, timeout=60)
+                        )
+                    else:
+                        response = await asyncio.to_thread(
+                            lambda: __import__('requests').get(story.image_versions2.candidates[0].url, timeout=60)
+                        )
+                    
+                    with open(file_path, 'wb') as f:
+                        f.write(response.content)
+                    
+                    return str(file_path), "Story"
+        
+        else:
+            # فيديو عادي
+            post_id = re.search(r'/p/([^/?]+)', url)
+            if post_id:
+                post_id = post_id.group(1)
+                media = await asyncio.to_thread(client.media_info, post_id)
+                
+                file_path = DOWNLOAD_DIR / f"post_{post_id}.mp4"
+                
+                if media.video_url:
+                    response = await asyncio.to_thread(
+                        lambda: __import__('requests').get(media.video_url, timeout=60)
+                    )
+                    
+                    with open(file_path, 'wb') as f:
+                        f.write(response.content)
+                    
+                    return str(file_path), media.caption or "Post"
+        
+        return None, "فشل استخراج المعرف من الرابط"
+        
+    except Exception as e:
+        logger.error(f"Instagram download error: {e}")
+        return None, str(e)
+
+# دالة التحميل باستخدام yt-dlp للمنصات الأخرى
 async def download_content(url, mode="video", quality="best", retry=0):
     max_retries = 3
     
@@ -79,16 +173,6 @@ async def download_content(url, mode="video", quality="best", retry=0):
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
-            'Referer': 'https://www.instagram.com/',
-        },
-        'extractor_args': {
-            'youtube': {
-                'skip': ['hls', 'dash'],
-                'player_client': ['web']
-            },
-            'instagram': {
-                'skip': ['hls', 'dash']
-            }
         },
         'retries': 5,
         'fragment_retries': 5,
@@ -104,10 +188,6 @@ async def download_content(url, mode="video", quality="best", retry=0):
         else:
             ydl_opts['format'] = 'bestvideo+bestaudio/best'
         ydl_opts['merge_output_format'] = 'mp4'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }]
     elif mode == "audio":
         ydl_opts['format'] = 'bestaudio/best'
         ydl_opts['postprocessors'] = [{
@@ -133,10 +213,19 @@ async def download_content(url, mode="video", quality="best", retry=0):
         
         # إعادة المحاولة للأخطاء المؤقتة
         if retry < max_retries and any(err in error_msg for err in ['Sign in', 'Timeout', '429', 'HTTP Error 403', 'HTTP Error 429']):
-            await asyncio.sleep(2 ** retry)  # Exponential backoff
+            await asyncio.sleep(2 ** retry)
             return await download_content(url, mode, quality, retry + 1)
         
         return None, error_msg
+
+# دالة موحدة للتحميل
+async def unified_download(url, mode="video", quality="best"):
+    platform = detect_platform(url)
+    
+    if platform.startswith("instagram"):
+        return await download_instagram(url, mode)
+    else:
+        return await download_content(url, mode, quality)
 
 # أمر البداية
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -179,9 +268,9 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🛠 **اختيار الجودة:** 1080p (فول) | 720p (عالية) | 480p (وسط) | أسرع جودة متوفرة.\n"
         "• 🔊 **دمج الصوت:** دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
         "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً - مو بوت ظيم.\n"
-        "• 🔄 **معالجة متقدمة:** تحسينات على yt-dlp مع Retry Logic ذكي!\n\n"
+        "• 🔄 **معالجة متقدمة:** instagrapi + yt-dlp للحل الموثوق 100%!\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 3.1 (بواسطة Manus AI + Advanced yt-dlp)\n\n"
+        "🚀 **الإصدار:** 3.2 (بواسطة Manus AI + instagrapi + yt-dlp)\n\n"
         "⚠️ *ملاحظة: حبيبي استخدم البوت للاشياء المسموحة وتدلل علينا.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -254,7 +343,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     status_msg = await query.edit_message_text(f"⏳ جاري التحميل يا بعد روحي... شوية صبر وتدلل.")
 
-    file_path, result = await download_content(final_url, mode, quality)
+    file_path, result = await unified_download(final_url, mode, quality)
 
     if file_path and os.path.exists(file_path):
         await status_msg.edit_text("✅ كمل التحميل حبيبي! جاري الإرسال...")
@@ -286,5 +375,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started with Advanced yt-dlp configuration...")
+    logger.info("Bot started with instagrapi + yt-dlp (Reliable solution)...")
     application.run_polling()

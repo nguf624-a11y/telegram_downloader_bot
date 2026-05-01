@@ -3,3 +3,4 @@ yt-dlp>=2024.12.16
 requests
 flask
 gunicorn
+instagrapi
