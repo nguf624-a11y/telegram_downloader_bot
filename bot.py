@@ -37,6 +37,9 @@ DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 DB_FILE = "users.json"
 
+# User-Agent وهمي لتجاوز حظر البوتات
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 # نظام قاعدة بيانات بسيط للمستخدمين
 def load_users():
     if os.path.exists(DB_FILE):
@@ -51,8 +54,10 @@ def save_user(user_id):
         with open(DB_FILE, 'w') as f:
             json.dump(list(users), f)
 
-# دالة التحميل باستخدام yt-dlp
-async def download_content(url, mode="video", quality="best"):
+# دالة التحميل باستخدام yt-dlp مع معالجة متقدمة
+async def download_content(url, mode="video", quality="best", retry=0):
+    max_retries = 3
+    
     ydl_opts = {
         'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
         'restrictfilenames': True,
@@ -64,6 +69,24 @@ async def download_content(url, mode="video", quality="best"):
         'no_warnings': True,
         'default_search': 'auto',
         'source_address': '0.0.0.0',
+        'user_agent': USER_AGENT,
+        'http_headers': {
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        },
+        'socket_timeout': 60,
+        'extractor_args': {
+            'youtube': {
+                'skip': ['hls', 'dash']
+            },
+            'instagram': {
+                'skip': ['hls', 'dash']
+            }
+        }
     }
 
     if mode == "video":
@@ -96,8 +119,15 @@ async def download_content(url, mode="video", quality="best"):
                 
             return file_path, info.get('title', 'video')
     except Exception as e:
-        logger.error(f"Download error: {e}")
-        return None, str(e)
+        error_msg = str(e)
+        logger.error(f"Download error (attempt {retry+1}): {error_msg}")
+        
+        # إعادة المحاولة للأخطاء المؤقتة
+        if retry < max_retries and ('Sign in' in error_msg or 'Timeout' in error_msg or '429' in error_msg):
+            await asyncio.sleep(2 ** retry)  # Exponential backoff
+            return await download_content(url, mode, quality, retry + 1)
+        
+        return None, error_msg
 
 # أمر البداية
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -141,7 +171,7 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🔊 **دمج الصوت:** دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
         "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً - مو بوت ظيم.\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 2.4 (بواسطة Manus AI)\n\n"
+        "🚀 **الإصدار:** 2.5 (بواسطة Manus AI)\n\n"
         "⚠️ *ملاحظة: حبيبي استخدم البوت للاشياء المسموحة وتدلل علينا.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -246,5 +276,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started with rich Iraqi dialect...")
+    logger.info("Bot started with anti-bot-detection measures...")
     application.run_polling()
