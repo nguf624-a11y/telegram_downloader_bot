@@ -30,6 +30,7 @@ def run_web():
 
 def keep_alive():
     t = Thread(target=run_web)
+    t.daemon = True
     t.start()
 
 # الإعدادات
@@ -74,6 +75,96 @@ def detect_platform(url):
     else:
         return "unknown"
 
+# دالة التحميل من Instagram باستخدام خدمة خارجية
+async def download_instagram_via_service(url):
+    """تحميل من Instagram باستخدام خدمة خارجية موثوقة"""
+    try:
+        headers = {
+            'User-Agent': USER_AGENT,
+            'Accept': 'application/json',
+        }
+        
+        # محاولة 1: استخدام saveig.app API
+        try:
+            api_url = "https://api.saveig.app/api/v1/instagram"
+            data = {'url': url}
+            
+            response = await asyncio.to_thread(
+                requests.post,
+                api_url,
+                json=data,
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'data' in result and len(result['data']) > 0:
+                    media = result['data'][0]
+                    if 'url' in media:
+                        video_url = media['url']
+                        
+                        # تحميل الفيديو
+                        video_response = await asyncio.to_thread(
+                            requests.get,
+                            video_url,
+                            headers=headers,
+                            timeout=60,
+                            stream=True
+                        )
+                        
+                        if video_response.status_code == 200:
+                            file_path = DOWNLOAD_DIR / f"instagram_{int(asyncio.get_event_loop().time())}.mp4"
+                            with open(file_path, 'wb') as f:
+                                for chunk in video_response.iter_content(chunk_size=8192):
+                                    if chunk:
+                                        f.write(chunk)
+                            return str(file_path), "Instagram Media"
+        except Exception as e:
+            logger.warning(f"saveig.app failed: {e}")
+        
+        # محاولة 2: استخدام instadownloader.co API
+        try:
+            api_url = "https://instadownloader.co/api/download"
+            params = {'url': url}
+            
+            response = await asyncio.to_thread(
+                requests.get,
+                api_url,
+                params=params,
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'url' in result:
+                    video_url = result['url']
+                    
+                    video_response = await asyncio.to_thread(
+                        requests.get,
+                        video_url,
+                        headers=headers,
+                        timeout=60,
+                        stream=True
+                    )
+                    
+                    if video_response.status_code == 200:
+                        file_path = DOWNLOAD_DIR / f"instagram_{int(asyncio.get_event_loop().time())}.mp4"
+                        with open(file_path, 'wb') as f:
+                            for chunk in video_response.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                        return str(file_path), "Instagram Media"
+        except Exception as e:
+            logger.warning(f"instadownloader.co failed: {e}")
+        
+        return None, "فشل تحميل من Instagram - جرب مرة أخرى"
+        
+    except Exception as e:
+        logger.error(f"Instagram service error: {e}")
+        return None, str(e)
+
 # دالة التحميل باستخدام yt-dlp مع معالجة متقدمة
 async def download_content(url, mode="video", quality="best", retry=0):
     max_retries = 3
@@ -103,12 +194,6 @@ async def download_content(url, mode="video", quality="best", retry=0):
         'retries': 10,
         'fragment_retries': 10,
         'skip_unavailable_fragments': True,
-        'extractor_args': {
-            'instagram': {
-                'username': None,
-                'password': None,
-            }
-        }
     }
 
     if mode == "video":
@@ -157,9 +242,22 @@ async def download_content(url, mode="video", quality="best", retry=0):
         
         return None, error_msg
 
-# دالة موحدة للتحميل
+# دالة موحدة للتحميل مع fallback
 async def unified_download(url, mode="video", quality="best"):
-    return await download_content(url, mode, quality)
+    platform = detect_platform(url)
+    
+    if platform.startswith("instagram"):
+        # محاولة الخدمة الخارجية أولاً
+        file_path, result = await download_instagram_via_service(url)
+        
+        # إذا فشلت، جرب yt-dlp كـ fallback
+        if not file_path:
+            logger.info(f"Instagram service failed, trying yt-dlp as fallback...")
+            file_path, result = await download_content(url, mode, quality)
+        
+        return file_path, result
+    else:
+        return await download_content(url, mode, quality)
 
 # أمر البداية
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -202,9 +300,9 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🛠 **اختيار الجودة:** 1080p (فول) | 720p (عالية) | 480p (وسط) | أسرع جودة متوفرة.\n"
         "• 🔊 **دمج الصوت:** دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
         "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً - مو بوت ظيم.\n"
-        "• 🔄 **معالجة متقدمة:** yt-dlp المحسّن مع Retry Logic والـ Fallback!\n\n"
+        "• 🔄 **معالجة متقدمة:** خدمات خارجية موثوقة + yt-dlp مع Fallback Logic!\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 3.3 (بواسطة Manus AI)\n\n"
+        "🚀 **الإصدار:** 3.4 (بواسطة Manus AI - External Services)\n\n"
         "⚠️ *ملاحظة: حبيبي استخدم البوت للاشياء المسموحة وتدلل علينا.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -299,7 +397,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # دالة تحديث النبذة عند بدء البوت
 async def set_bot_bio():
     try:
-        import requests
         url = f"https://api.telegram.org/bot{TOKEN}/setMyDescription"
         data = {
             'description': 'بوت مثل الطلقة 🔥',
@@ -327,5 +424,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started (v3.3 - Stable & Reliable)...")
+    logger.info("Bot started with External Services + yt-dlp (v3.4)...")
     application.run_polling()
