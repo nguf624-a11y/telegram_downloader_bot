@@ -1,13 +1,14 @@
 import os
 import asyncio
 import logging
-import yt_dlp
 import json
+import aiohttp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from pathlib import Path
 from flask import Flask
 from threading import Thread
+import requests
 
 # إعداد السجلات (Logging)
 logging.basicConfig(
@@ -37,8 +38,8 @@ DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 DB_FILE = "users.json"
 
-# User-Agent وهمي لتجاوز حظر البوتات
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+# Cobalt API - الحل الدائم والموثوق
+COBALT_API = "https://api.cobalt.tools/api/v1/media"
 
 # نظام قاعدة بيانات بسيط للمستخدمين
 def load_users():
@@ -54,80 +55,70 @@ def save_user(user_id):
         with open(DB_FILE, 'w') as f:
             json.dump(list(users), f)
 
-# دالة التحميل باستخدام yt-dlp مع معالجة متقدمة
-async def download_content(url, mode="video", quality="best", retry=0):
-    max_retries = 3
-    
-    ydl_opts = {
-        'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
-        'restrictfilenames': True,
-        'noplaylist': True,
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'logtostderr': False,
-        'quiet': True,
-        'no_warnings': True,
-        'default_search': 'auto',
-        'source_address': '0.0.0.0',
-        'user_agent': USER_AGENT,
-        'http_headers': {
-            'User-Agent': USER_AGENT,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
-        },
-        'socket_timeout': 60,
-        'extractor_args': {
-            'youtube': {
-                'skip': ['hls', 'dash']
-            },
-            'instagram': {
-                'skip': ['hls', 'dash']
-            }
-        }
-    }
-
-    if mode == "video":
-        if quality == "1080p":
-            ydl_opts['format'] = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]'
-        elif quality == "720p":
-            ydl_opts['format'] = 'bestvideo[height<=720]+bestaudio/best[height<=720]'
-        elif quality == "480p":
-            ydl_opts['format'] = 'bestvideo[height<=480]+bestaudio/best[height<=480]'
-        else:
-            ydl_opts['format'] = 'bestvideo+bestaudio/best'
-        ydl_opts['merge_output_format'] = 'mp4'
-    elif mode == "audio":
-        ydl_opts['format'] = 'bestaudio/best'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }]
-
+# دالة التحميل باستخدام Cobalt API (الحل الدائم)
+async def download_content(url, mode="video", quality="best"):
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = await asyncio.to_thread(ydl.extract_info, url, download=True)
-            file_path = ydl.prepare_filename(info)
-            
-            if mode == "audio":
-                file_path = str(Path(file_path).with_suffix('.mp3'))
-            elif mode == "video":
-                file_path = str(Path(file_path).with_suffix('.mp4'))
-                
-            return file_path, info.get('title', 'video')
+        # إرسال الطلب إلى Cobalt API
+        payload = {
+            "url": url,
+            "downloadMode": "auto",
+            "isAudioOnly": mode == "audio",
+            "filenamePattern": "basic"
+        }
+        
+        # استخدام requests في thread منفصل
+        response = await asyncio.to_thread(
+            requests.post,
+            COBALT_API,
+            json=payload,
+            timeout=30,
+            headers={"Accept": "application/json"}
+        )
+        
+        if response.status_code != 200:
+            return None, f"خطأ من الخدمة: {response.status_code}"
+        
+        data = response.json()
+        
+        if data.get("status") != "success":
+            return None, data.get("error", "فشل التحميل من الخدمة")
+        
+        # الحصول على رابط التحميل
+        download_url = data.get("url")
+        title = data.get("filename", "download")
+        
+        if not download_url:
+            return None, "لم يتم العثور على رابط التحميل"
+        
+        # تحميل الملف
+        file_response = await asyncio.to_thread(
+            requests.get,
+            download_url,
+            timeout=60,
+            stream=True
+        )
+        
+        if file_response.status_code != 200:
+            return None, "فشل تحميل الملف"
+        
+        # حفظ الملف
+        if mode == "audio":
+            file_path = DOWNLOAD_DIR / f"{title}.mp3"
+        else:
+            file_path = DOWNLOAD_DIR / f"{title}.mp4"
+        
+        with open(file_path, 'wb') as f:
+            for chunk in file_response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        
+        return str(file_path), title
+        
+    except asyncio.TimeoutError:
+        return None, "انقطع الاتصال - حاول مرة ثانية"
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Download error (attempt {retry+1}): {error_msg}")
-        
-        # إعادة المحاولة للأخطاء المؤقتة
-        if retry < max_retries and ('Sign in' in error_msg or 'Timeout' in error_msg or '429' in error_msg):
-            await asyncio.sleep(2 ** retry)  # Exponential backoff
-            return await download_content(url, mode, quality, retry + 1)
-        
-        return None, error_msg
+        logger.error(f"Download error: {e}")
+        return None, str(e)
 
 # أمر البداية
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -169,9 +160,10 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🇮🇶 **لهجة عراقية:** البوت عراقي منة وبينة 🇮🇶🫠\n"
         "• 🛠 **اختيار الجودة:** 1080p (فول) | 720p (عالية) | 480p (وسط) | أسرع جودة متوفرة.\n"
         "• 🔊 **دمج الصوت:** دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
-        "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً - مو بوت ظيم.\n\n"
+        "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً - مو بوت ظيم.\n"
+        "• 🔄 **تحديث تلقائي:** الخدمة تتحدث نفسها بدون تدخل مني!\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 2.5 (بواسطة Manus AI)\n\n"
+        "🚀 **الإصدار:** 3.0 (بواسطة Manus AI + Cobalt API)\n\n"
         "⚠️ *ملاحظة: حبيبي استخدم البوت للاشياء المسموحة وتدلل علينا.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -276,5 +268,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started with anti-bot-detection measures...")
+    logger.info("Bot started with Cobalt API (Auto-updating solution)...")
     application.run_polling()
