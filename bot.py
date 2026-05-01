@@ -1,9 +1,11 @@
 import logging
-import requests
+import subprocess
+import os
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.error import TelegramError
+import yt_dlp
 
 # إعداد السجلات
 logging.basicConfig(level=logging.INFO)
@@ -16,81 +18,88 @@ ADMIN_ID = 5838191316
 # قاموس لتخزين إحصائيات المستخدمين
 user_stats = {}
 
-# خدمات التحميل الموثوقة
-DOWNLOAD_SERVICES = {
-    "instagram": [
-        "https://api.saveig.app/api/download",
-        "https://instadownloader.co/api/download",
-    ],
-    "youtube": [
-        "https://api.cobalt.tools/api/json",
-        "https://youtube-downloader-api.herokuapp.com/download",
-    ],
-    "tiktok": [
-        "https://api.ssstik.io/fetch",
-        "https://tiktok-downloader-api.herokuapp.com/download",
-    ],
-    "facebook": [
-        "https://api.saveig.app/api/download",
-    ]
+# إعدادات yt-dlp المتقدمة
+YDL_OPTS = {
+    'format': 'best[ext=mp4]/best',
+    'quiet': False,
+    'no_warnings': False,
+    'socket_timeout': 120,
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    },
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['web'],
+        }
+    },
+    'retries': 10,
+    'fragment_retries': 10,
 }
 
-async def download_from_instagram(url: str) -> dict:
-    """تحميل من Instagram باستخدام خدمات موثوقة"""
-    for service_url in DOWNLOAD_SERVICES["instagram"]:
-        try:
-            payload = {"url": url}
-            response = requests.post(service_url, json=payload, timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                if "download_url" in data or "url" in data:
-                    return {
-                        "success": True,
-                        "url": data.get("download_url") or data.get("url"),
-                        "type": "video"
-                    }
-        except Exception as e:
-            logger.warning(f"Instagram service failed: {e}")
-            continue
-    return {"success": False, "error": "فشل التحميل من Instagram"}
+async def download_video(url: str, quality: str = "best") -> dict:
+    """تحميل فيديو باستخدام yt-dlp مع معالجة متقدمة"""
+    try:
+        opts = YDL_OPTS.copy()
+        
+        # تحديد الجودة
+        if quality == "480p":
+            opts['format'] = 'best[height<=480]/best'
+        elif quality == "720p":
+            opts['format'] = 'best[height<=720]/best'
+        elif quality == "1080p":
+            opts['format'] = 'best[height<=1080]/best'
+        
+        opts['outtmpl'] = '/tmp/%(title)s.%(ext)s'
+        
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            file_path = ydl.prepare_filename(info)
+            
+            if os.path.exists(file_path):
+                return {
+                    "success": True,
+                    "file_path": file_path,
+                    "title": info.get('title', 'Video')
+                }
+    except Exception as e:
+        logger.error(f"Download error: {e}")
+    
+    return {"success": False, "error": "فشل التحميل"}
 
-async def download_from_youtube(url: str) -> dict:
-    """تحميل من YouTube باستخدام خدمات موثوقة"""
-    for service_url in DOWNLOAD_SERVICES["youtube"]:
-        try:
-            payload = {"url": url, "quality": "best"}
-            response = requests.post(service_url, json=payload, timeout=60)
-            if response.status_code == 200:
-                data = response.json()
-                if "download_url" in data or "url" in data:
-                    return {
-                        "success": True,
-                        "url": data.get("download_url") or data.get("url"),
-                        "type": "video"
-                    }
-        except Exception as e:
-            logger.warning(f"YouTube service failed: {e}")
-            continue
-    return {"success": False, "error": "فشل التحميل من YouTube"}
-
-async def download_from_tiktok(url: str) -> dict:
-    """تحميل من TikTok باستخدام خدمات موثوقة"""
-    for service_url in DOWNLOAD_SERVICES["tiktok"]:
-        try:
-            payload = {"url": url}
-            response = requests.post(service_url, json=payload, timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                if "download_url" in data or "url" in data:
-                    return {
-                        "success": True,
-                        "url": data.get("download_url") or data.get("url"),
-                        "type": "video"
-                    }
-        except Exception as e:
-            logger.warning(f"TikTok service failed: {e}")
-            continue
-    return {"success": False, "error": "فشل التحميل من TikTok"}
+async def download_audio(url: str) -> dict:
+    """تحميل صوت باستخدام yt-dlp"""
+    try:
+        opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'quiet': False,
+            'no_warnings': False,
+            'socket_timeout': 120,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            'retries': 10,
+            'outtmpl': '/tmp/%(title)s.%(ext)s',
+        }
+        
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            file_path = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+            
+            if os.path.exists(file_path):
+                return {
+                    "success": True,
+                    "file_path": file_path,
+                    "title": info.get('title', 'Audio')
+                }
+    except Exception as e:
+        logger.error(f"Audio download error: {e}")
+    
+    return {"success": False, "error": "فشل التحميل"}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """أمر البدء"""
@@ -118,41 +127,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالجة الروابط"""
     url = update.message.text
-    user_id = update.effective_user.id
+    user_id = update.effective_user.user.id
     
     # تسجيل الإحصائيات
     if user_id not in user_stats:
         user_stats[user_id] = {"downloads": 0}
     
-    # التحقق من نوع الرابط
-    if "instagram.com" in url:
-        await update.message.reply_text("⏳ جاري التحميل من Instagram عيوني... ثواني ويكون جاهز!")
-        result = await download_from_instagram(url)
-    elif "youtube.com" in url or "youtu.be" in url:
-        await update.message.reply_text("⏳ جاري التحميل من YouTube حبيبي... ثواني ويكون جاهز!")
-        result = await download_from_youtube(url)
-    elif "tiktok.com" in url:
-        await update.message.reply_text("⏳ جاري التحميل من TikTok يا طيب... ثواني ويكون جاهز!")
-        result = await download_from_tiktok(url)
-    else:
+    # التحقق من صحة الرابط
+    valid_domains = ["youtube.com", "youtu.be", "instagram.com", "tiktok.com", "facebook.com"]
+    if not any(domain in url for domain in valid_domains):
         await update.message.reply_text("❌ الرابط ما يشتغل معي يا بعد روحي! 😅\n\nأرسل رابط من: YouTube, Instagram, TikTok, أو Facebook")
         return
     
+    # رسالة الانتظار
+    await update.message.reply_text("⏳ جاري التحميل عيوني... ثواني ويكون جاهز!")
+    
+    # تحميل الفيديو
+    result = await download_video(url)
+    
     if result["success"]:
         try:
-            if result["type"] == "video":
+            with open(result["file_path"], "rb") as f:
                 await update.message.reply_video(
-                    video=result["url"],
-                    caption="✅ وتدلل! تم التحميل بنجاح! 🎉"
-                )
-            else:
-                await update.message.reply_audio(
-                    audio=result["url"],
+                    video=f,
                     caption="✅ وتدلل! تم التحميل بنجاح! 🎉"
                 )
             user_stats[user_id]["downloads"] += 1
-        except TelegramError as e:
-            await update.message.reply_text(f"❌ فشل الإرسال: {str(e)}")
+            
+            # حذف الملف بعد الإرسال
+            try:
+                os.remove(result["file_path"])
+            except:
+                pass
+        except Exception as e:
+            await update.message.reply_text(f"❌ فشل الإرسال: {str(e)[:100]}")
     else:
         await update.message.reply_text(f"❌ {result['error']}\n\nتأكد من الرابط يا طيب! 🔍")
 
@@ -161,8 +169,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "📖 **شرح البوت:**\n\n"
         "1️⃣ أرسل أي رابط من YouTube, Instagram, TikTok, أو Facebook\n"
-        "2️⃣ اختر الجودة اللي تريدها\n"
-        "3️⃣ البوت يحمل الملف ويرسله لك\n\n"
+        "2️⃣ البوت يحمل الملف ويرسله لك\n"
+        "3️⃣ استمتع بالفيديو أو الصوت!\n\n"
         "🔥 **الميزات:**\n"
         "✅ تحميل بأعلى جودة\n"
         "✅ دعم الصوت والفيديو\n"
