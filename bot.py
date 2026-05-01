@@ -21,7 +21,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "البوت شغال وعال العال!"
+    return "البوت شغال وعال العال يا أغاتي!"
 
 def run_web():
     app.run(host='0.0.0.0', port=8080)
@@ -104,24 +104,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     save_user(user_id)
     welcome_text = (
-        "👋 هلا بيك عيوني بنسخة البوت المتطورة!\n\n"
-        "🚀 دزلي أي رابط من (يوتيوب، انستقرام، تيك توك، فيسبوك) وأني أنزله الك بأعلى جودة.\n\n"
+        "👋 هلا بيك يا بعد روحي بنسخة البوت المتطورة!\n\n"
+        "🚀 دزلي أي رابط يعجبك وأني أنزله الك من عيوني.. تدلل أغاتي.\n\n"
         "🛠 الميزات الجديدة:\n"
         "✅ تگدر تختار جودة الفيديو.\n"
         "✅ تنزيل ستوريات انستقرام وتيك توك.\n"
-        "✅ صوت صافي وبدون مشاكل.\n\n"
-        "أكتب /help إذا محتاج مساعدة."
+        "✅ لغة عراقية أصلية وتدلل حبيبي.\n\n"
+        "أكتب /help إذا محتاج مساعدة يا طيب."
     )
     await update.message.reply_text(welcome_text)
 
 # أمر المساعدة
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "📖 شلون تستخدم البوت:\n\n"
-        "1. دز رابط الفيديو أو الستوري.\n"
+        "📖 شلون تستخدم البوت يا أغاتي:\n\n"
+        "1. دز رابط الفيديو أو الستوري حبيبي.\n"
         "2. أختار تريد فيديو لو بس صوت.\n"
-        "3. إذا اختاريت فيديو، تگدر تختار الجودة اللي تعجبك.\n\n"
-        "💡 البوت يدعم يوتيوب، انستقرام، تيك توك، وفيسبوك.. وتدلل!"
+        "3. إذا اختاريت فيديو، تگدر تختار الجودة اللي تناسبك.\n\n"
+        "💡 البوت يدعم يوتيوب، انستقرام، تيك توك، وفيسبوك.. وتؤمر أمر!"
     )
     await update.message.reply_text(help_text)
 
@@ -129,21 +129,20 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     about_text = (
         "🤖 **حول بوت التنزيل المتطور**\n\n"
-        "هذا البوت هو مساعدك الشخصي حتى تنزل أي شي يعجبك من الإنترنت بسهولة وسرعة خرافية. سويناه حتى يخدمك ويقدم الك أحسن جودة وبدون دوخة راس.\n\n"
+        "هذا البوت هو مساعدك الشخصي يا بعد روحي، سويناه حتى تنزل أي شي يعجبك من الإنترنت بسهولة وسرعة خرافية وبدون أي تعب.. أغاتي أنت وتدلل علينا.\n\n"
         "🌟 **المنصات اللي ندعمها:**\n"
-        "• ❤️ **YouTube** (يوتيوب): فيديوهات لحد 1080p ومقاطع صوت MP3.\n"
-        "• 💜 **Instagram** (انستقرام): تنزيل فيديوهات، صور، وستوريات.\n"
-        "• 🖤 **TikTok** (تيك توك): تنزيل مقاطع بدون العلامة المائية.\n"
-        "• 💙 **Facebook** (فيسبوك): تنزيل فيديوهات ومنشورات عامة.\n\n"
+        "• ❤️ **YouTube** (يوتيوب): فيديوهات وصوت MP3.\n"
+        "• 💜 **Instagram** (انستقرام): فيديوهات، صور، وستوريات.\n"
+        "• 🖤 **TikTok** (تيك توك): مقاطع بدون علامة مائية.\n"
+        "• 💙 **Facebook** (فيسبوك): فيديوهات ومنشورات عامة.\n\n"
         "✨ **الميزات الجديدة:**\n"
-        "• 🇮🇶 **اللهجة العراقية:** البوت صار يحجي وياك بلهجتنا الأصلية وتدلل!\n"
-        "• 🛠 **اختيار الجودة:** تگدر تختار الدقة اللي تعجبك حتى تحافظ على النت.\n"
+        "• 🇮🇶 **لهجة عراقية:** البوت يحجي وياك بكلماتنا الطيبة (حبيبي، أغاتي، عيوني).\n"
+        "• 🛠 **اختيار الجودة:** تگدر تختار الدقة اللي تعجبك حبيبي.\n"
         "• 🔊 **دمج الصوت:** دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
-        "• ⚡️ **سرعة خرافية:** البوت سريع كلش وما يوكف بفضل الاستضافة الدائمة.\n"
-        "• 🔒 **خصوصية تامة:** الملفات تنمسح تلقائياً ورا ما توصلك.\n\n"
+        "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً.\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 2.3 (بواسطة Manus AI)\n\n"
-        "⚠️ *ملاحظة: عيوني استخدم البوت للاشياء اللي مسموح بيها وبدون ما تضر حقوق أحد.*"
+        "🚀 **الإصدار:** 2.4 (بواسطة Manus AI)\n\n"
+        "⚠️ *ملاحظة: حبيبي استخدم البوت للاشياء المسموحة وتدلل علينا.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
 
@@ -152,14 +151,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     users = load_users()
-    await update.message.reply_text(f"📊 إحصائيات البوت:\n\n👥 عدد المستخدمين: {len(users)}")
+    await update.message.reply_text(f"📊 إحصائيات البوت يا أغاتي:\n\n👥 عدد المستخدمين: {len(users)}")
 
 # أمر الإذاعة (للمسؤول فقط)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     if not context.args:
-        await update.message.reply_text("⚠️ عيوني أكتب الرسالة ورا الأمر. مثال:\n/broadcast هلا بالشباب الطيبين")
+        await update.message.reply_text("⚠️ حبيبي أكتب الرسالة ورا الأمر حتى أدزها للكل.")
         return
     
     message = " ".join(context.args)
@@ -167,11 +166,11 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count = 0
     for user_id in users:
         try:
-            await context.bot.send_message(chat_id=user_id, text=f"📢 رسالة من الإدارة:\n\n{message}")
+            await context.bot.send_message(chat_id=user_id, text=f"📢 رسالة من الإدارة يا طيبين:\n\n{message}")
             count += 1
         except:
             pass
-    await update.message.reply_text(f"✅ تم إرسال الرسالة لـ {count} مستخدم.")
+    await update.message.reply_text(f"✅ تم إرسال الرسالة لـ {count} مستخدم يا بعد روحي.")
 
 # معالجة الروابط
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -188,7 +187,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("أختار شتريد أنزلك؟", reply_markup=reply_markup)
+    await update.message.reply_text("تؤمر أمر حبيبي.. أختار شتريد أنزلك؟", reply_markup=reply_markup)
 
 # معالجة أزرار الاختيار
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -206,33 +205,33 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📱 480p (وسط)", callback_data=f"vid|480p|{url}")],
             [InlineKeyboardButton("⚡️ أسرع شي", callback_data=f"vid|best|{url}")]
         ]
-        await query.edit_message_text("أختار الجودة اللي تعجبك:", reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text("من عيوني.. أختار الجودة اللي تعجبك أغاتي:", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     mode = "video" if action == "vid" else "audio"
     quality = data[1] if action == "vid" else "best"
     final_url = data[2] if action == "vid" else url
 
-    status_msg = await query.edit_message_text(f"⏳ جاري التحميل عيوني... شوية صبر.")
+    status_msg = await query.edit_message_text(f"⏳ جاري التحميل يا بعد روحي... شوية صبر وتدلل.")
 
     file_path, result = await download_content(final_url, mode, quality)
 
     if file_path and os.path.exists(file_path):
-        await status_msg.edit_text("✅ كمل التحميل! جاري الإرسال...")
+        await status_msg.edit_text("✅ كمل التحميل حبيبي! جاري الإرسال...")
         try:
             with open(file_path, 'rb') as f:
                 if mode == "video":
-                    await query.message.reply_video(video=f, caption=f"🎬 {result}\n\nوتدلل عيوني!")
+                    await query.message.reply_video(video=f, caption=f"🎬 {result}\n\nوتدلل يا بعد روحي!")
                 else:
-                    await query.message.reply_audio(audio=f, caption=f"🎵 {result}\n\nوتدلل عيوني!")
+                    await query.message.reply_audio(audio=f, caption=f"🎵 {result}\n\nوتدلل يا أغاتي!")
             await status_msg.delete()
         except Exception as e:
-            await status_msg.edit_text(f"❌ صار خطأ بالإرسال: {e}")
+            await status_msg.edit_text(f"❌ صار خطأ بالإرسال حبيبي: {e}")
         finally:
             if os.path.exists(file_path):
                 os.remove(file_path)
     else:
-        await status_msg.edit_text(f"❌ فشل التحميل. تأكد من الرابط عيوني.\nالخطأ: {result}")
+        await status_msg.edit_text(f"❌ فشل التحميل.. تأكد من الرابط يا طيب.\nالخطأ: {result}")
 
 if __name__ == '__main__':
     keep_alive()
@@ -247,5 +246,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started with Iraqi dialect...")
+    logger.info("Bot started with rich Iraqi dialect...")
     application.run_polling()
