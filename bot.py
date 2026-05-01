@@ -125,6 +125,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text)
 
+# أمر عن البوت
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    about_text = (
+        "🤖 حول البوت:\n\n"
+        "هذا البوت مصمم لتحميل المحتوى من مختلف منصات التواصل الاجتماعي بأعلى جودة ممكنة.\n\n"
+        "👤 المطور: @Abdalraouf\n"
+        "🚀 الإصدار: 2.0 (المطور بواسطة Manus)\n"
+        "✨ ميزات: تحميل فيديو، صوت، قصص، وجودات متعددة."
+    )
+    await update.message.reply_text(about_text)
+
 # أمر الإحصائيات (للمسؤول فقط)
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -219,6 +230,7 @@ if __name__ == '__main__':
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("broadcast", broadcast))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
