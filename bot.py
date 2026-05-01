@@ -21,7 +21,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is alive and running!"
+    return "البوت شغال وعال العال!"
 
 def run_web():
     app.run(host='0.0.0.0', port=8080)
@@ -32,7 +32,7 @@ def keep_alive():
 
 # الإعدادات
 TOKEN = "8689457230:AAHkSYe_IEo3HvFrQHuyYHerrjnsA2H1ezQ"
-ADMIN_ID = 1349568101  # معرف المستخدم الخاص بك للإحصائيات والإذاعة
+ADMIN_ID = 1349568101
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 DB_FILE = "users.json"
@@ -104,45 +104,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     save_user(user_id)
     welcome_text = (
-        "👋 أهلاً بك في بوت التنزيل المتطور!\n\n"
-        "🚀 أرسل لي رابطاً من (يوتيوب، انستقرام، تيك توك، فيسبوك) وسأقوم بتحميله لك.\n\n"
+        "👋 هلا بيك عيوني بنسخة البوت المتطورة!\n\n"
+        "🚀 دزلي أي رابط من (يوتيوب، انستقرام، تيك توك، فيسبوك) وأني أنزله الك بأعلى جودة.\n\n"
         "🛠 الميزات الجديدة:\n"
-        "✅ اختيار جودة الفيديو.\n"
-        "✅ تحميل القصص (Stories).\n"
-        "✅ استقرار عالي وصوت نقي.\n\n"
-        "استخدم /help للمزيد من المعلومات."
+        "✅ تگدر تختار جودة الفيديو.\n"
+        "✅ تنزيل ستوريات انستقرام وتيك توك.\n"
+        "✅ صوت صافي وبدون مشاكل.\n\n"
+        "أكتب /help إذا محتاج مساعدة."
     )
     await update.message.reply_text(welcome_text)
 
 # أمر المساعدة
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "📖 كيفية استخدام البوت:\n\n"
-        "1. أرسل رابط الفيديو أو القصة.\n"
-        "2. اختر الصيغة (فيديو أو صوت).\n"
-        "3. إذا اخترت فيديو، يمكنك اختيار الجودة.\n\n"
-        "💡 البوت يدعم يوتيوب، انستقرام، تيك توك، وفيسبوك."
+        "📖 شلون تستخدم البوت:\n\n"
+        "1. دز رابط الفيديو أو الستوري.\n"
+        "2. أختار تريد فيديو لو بس صوت.\n"
+        "3. إذا اختاريت فيديو، تگدر تختار الجودة اللي تعجبك.\n\n"
+        "💡 البوت يدعم يوتيوب، انستقرام، تيك توك، وفيسبوك.. وتدلل!"
     )
     await update.message.reply_text(help_text)
 
 # أمر عن البوت
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     about_text = (
-        "🤖 **حول بوت التنزيل المتطور**\n\n"
-        "هذا البوت هو مساعدك الشخصي لتحميل المحتوى من الإنترنت بسهولة وسرعة فائقة. تم تطويره ليوفر تجربة مستخدم سلسة مع الحفاظ على أعلى جودة ممكنة.\n\n"
-        "🌟 **المنصات المدعومة:**\n"
-        "• 📺 **YouTube:** فيديوهات (حتى 1080p) ومقاطع صوتية MP3.\n"
-        "• 📸 **Instagram:** تحميل الفيديوهات، الصور، والقصص (Stories).\n"
-        "• 🎵 **TikTok:** تحميل المقاطع بدون علامة مائية.\n"
-        "• 📘 **Facebook:** تحميل الفيديوهات والمنشورات العامة.\n\n"
-        "🛠 **الميزات التقنية:**\n"
-        "• اختيار جودة الفيديو لتوفير البيانات.\n"
-        "• دمج تلقائي للصوت مع الفيديو بأعلى جودة.\n"
-        "• سرعة معالجة عالية بفضل تقنيات البرمجة الحديثة.\n"
-        "• حماية الخصوصية: يتم حذف الملفات تلقائياً بعد الإرسال.\n\n"
+        "🤖 **حول بوت التنزيل المتطور (باللهجة العراقية)**\n\n"
+        "هذا البوت هو مساعدك الشخصي حتى تنزل أي شي يعجبك من الإنترنت بسهولة وسرعة خرافية. سويناه حتى يخدمك ويقدم الك أحسن جودة وبدون دوخة راس.\n\n"
+        "🌟 **المنصات اللي ندعمها:**\n"
+        "• 📺 **YouTube:** فيديوهات (لحد 1080p) ومقاطع صوت MP3.\n"
+        "• 📸 **Instagram:** تنزيل فيديوهات، صور، وستوريات.\n"
+        "• 🎵 **TikTok:** تنزيل مقاطع بدون العلامة المائية.\n"
+        "• 📘 **Facebook:** تنزيل فيديوهات ومنشورات عامة.\n\n"
+        "🛠 **ميزات تقنية:**\n"
+        "• تگدر تختار الجودة حتى تحافظ على الرصيد (النت).\n"
+        "• دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
+        "• البوت سريع كلش وما يوكف.\n"
+        "• خصوصيتك محفوظة: الملفات تنمسح تلقائياً ورا ما توصلك.\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 2.1 (بواسطة Manus AI)\n\n"
-        "⚠️ *ملاحظة: يرجى استخدام البوت لتحميل المحتوى الذي تملك حقوقه أو للاستخدام الشخصي فقط.*"
+        "🚀 **الإصدار:** 2.2 (بواسطة Manus AI)\n\n"
+        "⚠️ *ملاحظة: عيوني استخدم البوت للاشياء اللي مسموح بيها وبدون ما تضر حقوق أحد.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
 
@@ -158,7 +158,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     if not context.args:
-        await update.message.reply_text("⚠️ يرجى كتابة الرسالة بعد الأمر. مثال:\n/broadcast أهلاً بالجميع")
+        await update.message.reply_text("⚠️ عيوني أكتب الرسالة ورا الأمر. مثال:\n/broadcast هلا بالشباب الطيبين")
         return
     
     message = " ".join(context.args)
@@ -170,7 +170,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             count += 1
         except:
             pass
-    await update.message.reply_text(f"✅ تم إرسال الرسالة إلى {count} مستخدم.")
+    await update.message.reply_text(f"✅ تم إرسال الرسالة لـ {count} مستخدم.")
 
 # معالجة الروابط
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -187,7 +187,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("اختر الصيغة المطلوبة:", reply_markup=reply_markup)
+    await update.message.reply_text("أختار شتريد أنزلك؟", reply_markup=reply_markup)
 
 # معالجة أزرار الاختيار
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -200,38 +200,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "v_sel":
         keyboard = [
-            [InlineKeyboardButton("🔥 1080p", callback_data=f"vid|1080p|{url}")],
-            [InlineKeyboardButton("💎 720p", callback_data=f"vid|720p|{url}")],
-            [InlineKeyboardButton("📱 480p", callback_data=f"vid|480p|{url}")],
-            [InlineKeyboardButton("⚡️ أسرع جودة", callback_data=f"vid|best|{url}")]
+            [InlineKeyboardButton("🔥 1080p (فول)", callback_data=f"vid|1080p|{url}")],
+            [InlineKeyboardButton("💎 720p (عالية)", callback_data=f"vid|720p|{url}")],
+            [InlineKeyboardButton("📱 480p (وسط)", callback_data=f"vid|480p|{url}")],
+            [InlineKeyboardButton("⚡️ أسرع شي", callback_data=f"vid|best|{url}")]
         ]
-        await query.edit_message_text("اختر جودة الفيديو:", reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text("أختار الجودة اللي تعجبك:", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     mode = "video" if action == "vid" else "audio"
     quality = data[1] if action == "vid" else "best"
     final_url = data[2] if action == "vid" else url
 
-    status_msg = await query.edit_message_text(f"⏳ جاري التحميل ({'فيديو' if mode=='video' else 'صوت'})... يرجى الانتظار.")
+    status_msg = await query.edit_message_text(f"⏳ جاري التحميل عيوني... شوية صبر.")
 
     file_path, result = await download_content(final_url, mode, quality)
 
     if file_path and os.path.exists(file_path):
-        await status_msg.edit_text("✅ اكتمل التحميل! جاري الإرسال...")
+        await status_msg.edit_text("✅ كمل التحميل! جاري الإرسال...")
         try:
             with open(file_path, 'rb') as f:
                 if mode == "video":
-                    await query.message.reply_video(video=f, caption=f"🎬 {result}")
+                    await query.message.reply_video(video=f, caption=f"🎬 {result}\n\nوتدلل عيوني!")
                 else:
-                    await query.message.reply_audio(audio=f, caption=f"🎵 {result}")
+                    await query.message.reply_audio(audio=f, caption=f"🎵 {result}\n\nوتدلل عيوني!")
             await status_msg.delete()
         except Exception as e:
-            await status_msg.edit_text(f"❌ خطأ أثناء الإرسال: {e}")
+            await status_msg.edit_text(f"❌ صار خطأ بالإرسال: {e}")
         finally:
             if os.path.exists(file_path):
                 os.remove(file_path)
     else:
-        await status_msg.edit_text(f"❌ فشل التحميل. تأكد من الرابط.\nالخطأ: {result}")
+        await status_msg.edit_text(f"❌ فشل التحميل. تأكد من الرابط عيوني.\nالخطأ: {result}")
 
 if __name__ == '__main__':
     keep_alive()
@@ -246,5 +246,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started with advanced features...")
+    logger.info("Bot started with Iraqi dialect...")
     application.run_polling()
