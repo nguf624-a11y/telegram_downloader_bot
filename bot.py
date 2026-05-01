@@ -74,95 +74,11 @@ def detect_platform(url):
     else:
         return "unknown"
 
-# دالة التحميل من Instagram باستخدام معالجة متقدمة
-async def download_instagram_advanced(url, mode="video"):
-    try:
-        # محاولة استخراج معرف الوسائط
-        media_id = None
-        
-        if "reel" in url:
-            match = re.search(r'/reel/([^/?]+)', url)
-            if match:
-                media_id = match.group(1)
-        elif "stories" in url:
-            match = re.search(r'/stories/([^/?]+)/(\d+)', url)
-            if match:
-                media_id = match.group(2)
-        else:
-            match = re.search(r'/p/([^/?]+)', url)
-            if match:
-                media_id = match.group(1)
-        
-        if not media_id:
-            return None, "فشل استخراج معرف الوسائط"
-        
-        # محاولة الحصول على بيانات الوسائط من Instagram API
-        headers = {
-            'User-Agent': USER_AGENT,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Referer': 'https://www.instagram.com/',
-        }
-        
-        # محاولة الحصول على البيانات من Instagram
-        api_url = f"https://www.instagram.com/api/v1/media/{media_id}/info/"
-        
-        response = await asyncio.to_thread(
-            requests.get,
-            api_url,
-            headers=headers,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            media_data = data.get('media', {})
-            
-            # محاولة الحصول على الفيديو
-            if 'video_url' in media_data:
-                video_url = media_data['video_url']
-            elif 'carousel_media' in media_data:
-                # إذا كان carousel، خذ أول فيديو
-                for item in media_data['carousel_media']:
-                    if 'video_url' in item:
-                        video_url = item['video_url']
-                        break
-                else:
-                    return None, "لم يتم العثور على فيديو في الـ carousel"
-            else:
-                return None, "لم يتم العثور على فيديو"
-            
-            # تحميل الفيديو
-            file_path = DOWNLOAD_DIR / f"instagram_{media_id}.mp4"
-            
-            video_response = await asyncio.to_thread(
-                requests.get,
-                video_url,
-                headers=headers,
-                timeout=60,
-                stream=True
-            )
-            
-            if video_response.status_code == 200:
-                with open(file_path, 'wb') as f:
-                    for chunk in video_response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                
-                title = media_data.get('caption', {}).get('text', 'Instagram Media')[:50]
-                return str(file_path), title
-        
-        return None, "فشل الحصول على بيانات الوسائط من Instagram"
-        
-    except Exception as e:
-        logger.error(f"Instagram advanced download error: {e}")
-        return None, str(e)
-
-# دالة التحميل باستخدام yt-dlp للمنصات الأخرى
+# دالة التحميل باستخدام yt-dlp مع معالجة متقدمة
 async def download_content(url, mode="video", quality="best", retry=0):
     max_retries = 3
     
-    # إعدادات yt-dlp المتقدمة
+    # إعدادات yt-dlp المتقدمة والموثوقة
     ydl_opts = {
         'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
         'restrictfilenames': True,
@@ -173,7 +89,7 @@ async def download_content(url, mode="video", quality="best", retry=0):
         'quiet': True,
         'no_warnings': True,
         'default_search': 'auto',
-        'socket_timeout': 60,
+        'socket_timeout': 120,
         'user_agent': USER_AGENT,
         'http_headers': {
             'User-Agent': USER_AGENT,
@@ -182,9 +98,17 @@ async def download_content(url, mode="video", quality="best", retry=0):
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Referer': 'https://www.instagram.com/',
         },
-        'retries': 5,
-        'fragment_retries': 5,
+        'retries': 10,
+        'fragment_retries': 10,
+        'skip_unavailable_fragments': True,
+        'extractor_args': {
+            'instagram': {
+                'username': None,
+                'password': None,
+            }
+        }
     }
 
     if mode == "video":
@@ -197,6 +121,12 @@ async def download_content(url, mode="video", quality="best", retry=0):
         else:
             ydl_opts['format'] = 'bestvideo+bestaudio/best'
         ydl_opts['merge_output_format'] = 'mp4'
+        ydl_opts['postprocessors'] = [
+            {
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }
+        ]
     elif mode == "audio":
         ydl_opts['format'] = 'bestaudio/best'
         ydl_opts['postprocessors'] = [{
@@ -221,28 +151,15 @@ async def download_content(url, mode="video", quality="best", retry=0):
         logger.error(f"Download error (attempt {retry+1}): {error_msg}")
         
         # إعادة المحاولة للأخطاء المؤقتة
-        if retry < max_retries and any(err in error_msg for err in ['Sign in', 'Timeout', '429', 'HTTP Error 403', 'HTTP Error 429']):
+        if retry < max_retries and any(err in error_msg for err in ['Sign in', 'Timeout', '429', 'HTTP Error 403', 'HTTP Error 429', 'unavailable']):
             await asyncio.sleep(2 ** retry)
             return await download_content(url, mode, quality, retry + 1)
         
         return None, error_msg
 
-# دالة موحدة للتحميل مع fallback
+# دالة موحدة للتحميل
 async def unified_download(url, mode="video", quality="best"):
-    platform = detect_platform(url)
-    
-    if platform.startswith("instagram"):
-        # محاولة Instagram المتقدمة أولاً
-        file_path, result = await download_instagram_advanced(url, mode)
-        
-        # إذا فشلت، جرب yt-dlp كـ fallback
-        if not file_path:
-            logger.info(f"Instagram advanced failed, trying yt-dlp as fallback...")
-            file_path, result = await download_content(url, mode, quality)
-        
-        return file_path, result
-    else:
-        return await download_content(url, mode, quality)
+    return await download_content(url, mode, quality)
 
 # أمر البداية
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -285,9 +202,9 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🛠 **اختيار الجودة:** 1080p (فول) | 720p (عالية) | 480p (وسط) | أسرع جودة متوفرة.\n"
         "• 🔊 **دمج الصوت:** دمج تلقائي للصوت وية الفيديو بأحسن دقة.\n"
         "• ⚡️ **سرعة خرافية:** البوت شغال 24 ساعة وما يوكف أبداً - مو بوت ظيم.\n"
-        "• 🔄 **معالجة متقدمة:** Instagram API + yt-dlp + Fallback Logic!\n\n"
+        "• 🔄 **معالجة متقدمة:** yt-dlp المحسّن مع Retry Logic والـ Fallback!\n\n"
         "👤 **المطور:** @Abdalraouf\n"
-        "🚀 **الإصدار:** 3.3 (بواسطة Manus AI - Advanced Hybrid)\n\n"
+        "🚀 **الإصدار:** 3.3 (بواسطة Manus AI)\n\n"
         "⚠️ *ملاحظة: حبيبي استخدم البوت للاشياء المسموحة وتدلل علينا.*"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -392,5 +309,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    logger.info("Bot started with Instagram API + yt-dlp Hybrid (Advanced)...")
+    logger.info("Bot started (v3.3 - Stable & Reliable)...")
     application.run_polling()
