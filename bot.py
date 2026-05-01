@@ -296,8 +296,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await status_msg.edit_text(f"❌ فشل التحميل.. تأكد من الرابط يا طيب.\nالخطأ: {result}")
 
+# دالة تحديث النبذة عند بدء البوت
+async def set_bot_bio():
+    try:
+        import requests
+        url = f"https://api.telegram.org/bot{TOKEN}/setMyDescription"
+        data = {
+            'description': 'بوت مثل الطلقة 🔥',
+            'language_code': 'ar'
+        }
+        response = await asyncio.to_thread(requests.post, url, json=data)
+        if response.status_code == 200:
+            logger.info("✅ Bot bio updated successfully!")
+    except Exception as e:
+        logger.error(f"Failed to update bio: {e}")
+
 if __name__ == '__main__':
     keep_alive()
+    
+    # تحديث النبذة عند البدء
+    asyncio.run(set_bot_bio())
     
     application = ApplicationBuilder().token(TOKEN).build()
     
