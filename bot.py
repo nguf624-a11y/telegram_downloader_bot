@@ -9,7 +9,11 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = "8689457230:AAHkSYe_IEo3HvFrQHuyYHerrjnsA2H1ezQ"
+# قراءة التوكن من متغيرات البيئة (آمن)
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("❌ TELEGRAM_BOT_TOKEN غير موجود في متغيرات البيئة!")
+
 ADMIN_ID = 5838191316
 user_stats = {}
 
@@ -50,15 +54,30 @@ YDL_OPTS_YOUTUBE = {
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
+    first_name = update.effective_user.first_name
+    
     if user_id not in user_stats:
         user_stats[user_id] = {"downloads": 0}
     
     await update.message.reply_text(
-        "🔥 هلا بيك حبيبي! 🔥\n\n"
-        "أنا بوت تحميل ذكي وسريع جداً! 💨\n"
-        "أرسل لي أي رابط من:\n"
-        "📺 YouTube | 📸 Instagram (Posts/Reels/Stories) | 🎵 TikTok | 📘 Facebook\n\n"
-        "وأنا بحمله لك بأعلى جودة! 🚀"
+        f"🔥 **أهلاً وسهلاً يا {first_name}!** 🔥\n\n"
+        "أنا بوت تحميل متطور وموثوق 100%!\n\n"
+        "📺 **المنصات المدعومة:**\n"
+        "🔴 YouTube\n"
+        "📸 Instagram (Posts, Reels, Stories)\n"
+        "🎵 TikTok\n"
+        "📘 Facebook\n\n"
+        "🌟 **الميزات:**\n"
+        "✅ تحميل بأعلى جودة\n"
+        "✅ سرعة خرافية\n"
+        "✅ لهجة عراقية أصلية 🇮🇶\n"
+        "✅ دعم Instagram Stories و Reels\n"
+        "✅ تشغيل 24/7 مستقر\n\n"
+        "📝 **الاستخدام:**\n"
+        "أرسل أي رابط من المنصات فوق وأنا أحمله لك!\n\n"
+        "/help - شرح البوت\n"
+        "/about - معلومات البوت",
+        parse_mode="Markdown"
     )
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
