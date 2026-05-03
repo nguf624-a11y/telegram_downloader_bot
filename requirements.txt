@@ -1,5 +1,5 @@
 python-telegram-bot==20.7
-yt-dlp==2024.12.16
+yt-dlp==2025.2.22
 requests==2.31.0
 ffmpeg-python==0.2.1
 Flask==3.0.0
