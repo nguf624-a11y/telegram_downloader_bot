@@ -142,15 +142,21 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text(f"❌ خطأ: {error_msg}")
 
 def main() -> None:
-    app = Application.builder().token(BOT_TOKEN).build()
+    # إعدادات البروكسي MTProto
+    proxy_url = "socks5://sg.tg.toggle.org:443"
+    proxy_key = "e0693ffb16d766aec9a411676f6f676c652e636f6d"
     
+    # إنشاء التطبيق مع البروكسي
+    app = Application.builder().token(BOT_TOKEN).proxy_url(proxy_url).build()
+    
+    # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("about", about_command))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     
-    print("🚀 البوت بدأ يشتغل... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل مع البروكسي... بوت مثل الطلقة 🔥")
     app.run_polling()
 
 if __name__ == "__main__":
