@@ -5,6 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 import requests
+from flask import Flask, request
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -205,18 +206,73 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     await update.message.reply_text(f"✅ تم إرسال الرسالة لـ {count} مستخدم!")
 
+# إعداد Flask للـ Webhook
+app = Flask(__name__)
+
+# متغير عام للـ Application
+telegram_app = None
+
+@app.route("/webhook", methods=["POST"])
+async def webhook():
+    """استقبال التحديثات من Telegram"""
+    try:
+        update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+        await telegram_app.process_update(update)
+        return "OK", 200
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return "Error", 500
+
+@app.route("/health", methods=["GET"])
+def health():
+    """فحص صحة البوت"""
+    return "🔥 البوت شغال وتمام التمام! 🔥", 200
+
+@app.route("/", methods=["GET"])
+def index():
+    """الصفحة الرئيسية"""
+    return "🚀 بوت التحميل يعمل بنجاح! 🚀", 200
+
+async def setup_webhook():
+    """إعداد Webhook مع Telegram"""
+    try:
+        # الحصول على رابط الخادم من متغيرات البيئة
+        webhook_url = os.getenv("RENDER_EXTERNAL_URL", "https://my-downloader-bot-nn7g.onrender.com")
+        if webhook_url.endswith("/"):
+            webhook_url = webhook_url[:-1]
+        
+        webhook_url = f"{webhook_url}/webhook"
+        
+        # حذف الـ Webhook القديم
+        await telegram_app.bot.delete_webhook(drop_pending_updates=True)
+        
+        # إضافة الـ Webhook الجديد
+        await telegram_app.bot.set_webhook(url=webhook_url)
+        logger.info(f"✅ Webhook تم تفعيله: {webhook_url}")
+    except Exception as e:
+        logger.error(f"❌ خطأ في إعداد Webhook: {e}")
+
 def main() -> None:
-    app = Application.builder().token(BOT_TOKEN).build()
+    global telegram_app
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("about", about_command))
-    app.add_handler(CommandHandler("stats", stats_command))
-    app.add_handler(CommandHandler("broadcast", broadcast_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
+    telegram_app = Application.builder().token(BOT_TOKEN).build()
     
-    print("🚀 البوت بدأ يشتغل... بوت مثل الطلقة 🔥")
-    app.run_polling()
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("help", help_command))
+    telegram_app.add_handler(CommandHandler("about", about_command))
+    telegram_app.add_handler(CommandHandler("stats", stats_command))
+    telegram_app.add_handler(CommandHandler("broadcast", broadcast_command))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
+    
+    # إعداد Webhook
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(setup_webhook())
+    
+    # تشغيل Flask
+    port = int(os.getenv("PORT", 5000))
+    print(f"🚀 البوت بدأ يشتغل على Webhook... بوت مثل الطلقة 🔥")
+    app.run(host="0.0.0.0", port=port, debug=False)
 
 if __name__ == "__main__":
     main()
