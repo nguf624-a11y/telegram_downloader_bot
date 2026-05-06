@@ -203,6 +203,7 @@ async def set_commands(app: Application) -> None:
         BotCommand("help", "📖 شرح البوت"),
         BotCommand("about", "ℹ️ معلومات البوت"),
         BotCommand("stats", "📊 إحصائيات البوت"),
+        BotCommand("broadcast", "📢 إرسال رسالة (مسؤول)"),
     ]
     await app.bot.set_my_commands(commands)
     logger.info("✅ تم إضافة قائمة الأوامر")
