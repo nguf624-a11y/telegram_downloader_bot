@@ -1,7 +1,7 @@
 import logging
 import os
 import asyncio
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 import threading
@@ -163,6 +163,17 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         logger.error(f"Download error: {error_msg}")
         await update.message.reply_text(f"❌ خطأ: {error_msg}")
 
+async def set_commands(app: Application) -> None:
+    """إضافة قائمة الأوامر"""
+    commands = [
+        BotCommand("start", "🔥 بدء البوت"),
+        BotCommand("help", "📖 شرح البوت"),
+        BotCommand("about", "ℹ️ معلومات البوت"),
+        BotCommand("stats", "📊 إحصائيات البوت"),
+    ]
+    await app.bot.set_my_commands(commands)
+    logger.info("✅ تم إضافة قائمة الأوامر")
+
 def main() -> None:
     # إعدادات البروكسي MTProto
     proxy_url = "socks5://sg.tg.toggle.org:443"
@@ -177,7 +188,10 @@ def main() -> None:
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     
-    print("🚀 البوت بدأ يشتغل مع تحسينات السرعة... بوت مثل الطلقة 🔥")
+    # إضافة قائمة الأوامر عند البدء
+    app.post_init = set_commands
+    
+    print("🚀 البوت بدأ يشتغل مع قائمة الأوامر... بوت مثل الطلقة 🔥")
     app.run_polling()
 
 if __name__ == "__main__":
