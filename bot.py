@@ -4,8 +4,8 @@ import asyncio
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
-import subprocess
-import threading
+import requests
+import json
 import shutil
 
 logging.basicConfig(level=logging.INFO)
@@ -33,14 +33,6 @@ YDL_OPTS = {
     'fragment_retries': 20,
     'skip_unavailable_fragments': True,
     'outtmpl': '/tmp/%(title)s.%(ext)s',
-}
-
-# إعدادات خاصة للـ Facebook
-YDL_OPTS_FB = {
-    **YDL_OPTS,
-    'socket_timeout': 400,
-    'retries': 30,
-    'fragment_retries': 30,
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -116,50 +108,47 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         parse_mode="Markdown"
     )
 
-def download_with_instaloader(url):
-    """تحميل من Instagram باستخدام instaloader"""
+def download_with_cobalt_api(url):
+    """تحميل باستخدام Cobalt API - للـ Instagram و Facebook و TikTok"""
     try:
-        import instaloader
+        # استخدام Cobalt API المجانية
+        api_url = "https://api.cobalt.tools/api/json"
         
-        loader = instaloader.Instaloader(
-            quiet=False,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        )
+        payload = {
+            "url": url,
+            "vCodec": "h264",
+            "vQuality": "max",
+            "aFormat": "best",
+            "filenamePattern": "basic"
+        }
         
-        # استخراج معرّف الـ post
-        if "reel" in url or "p/" in url:
-            post_id = url.split("/")[-2]
-            
-            # إنشاء مجلد مؤقت
-            temp_dir = f"/tmp/insta_{post_id}"
-            os.makedirs(temp_dir, exist_ok=True)
-            
-            # تحميل الـ post
-            post = instaloader.Post.from_shortcode(loader.context, post_id)
-            
-            # حفظ الفيديو
-            loader.dirname_pattern = temp_dir
-            loader.download_post(post, target=temp_dir)
-            
-            # البحث عن الملف المحمل
-            for root, dirs, files in os.walk(temp_dir):
-                for file in files:
-                    if file.endswith(('.mp4', '.jpg', '.png')):
-                        file_path = os.path.join(root, file)
-                        # نسخ الملف إلى /tmp
-                        new_path = f"/tmp/instagram_{post_id}.{file.split('.')[-1]}"
-                        shutil.copy(file_path, new_path)
-                        # حذف المجلد المؤقت
-                        shutil.rmtree(temp_dir, ignore_errors=True)
-                        return new_path
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
         
-        # حذف المجلد المؤقت إذا لم نجد شيء
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
         
+        if response.status_code == 200:
+            data = response.json()
+            
+            if data.get("status") == "success" and data.get("url"):
+                # تحميل الملف
+                video_url = data.get("url")
+                video_response = requests.get(video_url, timeout=30, stream=True)
+                
+                if video_response.status_code == 200:
+                    file_path = f"/tmp/cobalt_{url.split('/')[-1][:20]}.mp4"
+                    with open(file_path, "wb") as f:
+                        for chunk in video_response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                    return file_path
+        
+        logger.error(f"Cobalt API error: {response.text}")
         return None
     except Exception as e:
-        logger.error(f"instaloader error: {str(e)}")
+        logger.error(f"Cobalt API exception: {str(e)}")
         return None
 
 def download_with_yt_dlp(url, ydl_opts):
@@ -190,19 +179,19 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         file_path = None
         
-        # اختيار الطريقة المناسبة
-        if "instagram.com" in url:
-            # محاولة instaloader أولاً
-            logger.info("محاولة instaloader...")
-            file_path = download_with_instaloader(url)
-            
-            # إذا فشل، جرب yt-dlp
-            if not file_path:
-                logger.info("محاولة yt-dlp...")
-                file_path = download_with_yt_dlp(url, YDL_OPTS)
-        elif "facebook.com" in url or "fb.watch" in url:
-            file_path = download_with_yt_dlp(url, YDL_OPTS_FB)
-        else:
+        # للـ Instagram و Facebook و TikTok - استخدم Cobalt API
+        if "instagram.com" in url or "facebook.com" in url or "fb.watch" in url or "tiktok.com" in url:
+            logger.info("محاولة Cobalt API...")
+            file_path = download_with_cobalt_api(url)
+        
+        # للـ YouTube - استخدم yt-dlp
+        if not file_path and ("youtube.com" in url or "youtu.be" in url):
+            logger.info("محاولة yt-dlp...")
+            file_path = download_with_yt_dlp(url, YDL_OPTS)
+        
+        # إذا فشل Cobalt، جرب yt-dlp
+        if not file_path:
+            logger.info("محاولة yt-dlp كبديل...")
             file_path = download_with_yt_dlp(url, YDL_OPTS)
         
         if file_path and os.path.exists(file_path):
@@ -252,7 +241,7 @@ def main() -> None:
     # إضافة قائمة الأوامر عند البدء
     app.post_init = set_commands
     
-    print("🚀 البوت بدأ يشتغل مع instaloader... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل مع Cobalt API... بوت مثل الطلقة 🔥")
     app.run_polling()
 
 if __name__ == "__main__":
