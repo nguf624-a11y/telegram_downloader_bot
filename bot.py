@@ -4,6 +4,7 @@ import asyncio
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
+import subprocess
 import threading
 
 logging.basicConfig(level=logging.INFO)
@@ -19,8 +20,8 @@ user_stats = {}
 # إعدادات محسّنة للسرعة
 YDL_OPTS = {
     'format': 'best[ext=mp4]/best[ext=webm]/best',
-    'quiet': True,
-    'no_warnings': True,
+    'quiet': False,
+    'no_warnings': False,
     'socket_timeout': 300,
     'http_headers': {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -31,8 +32,17 @@ YDL_OPTS = {
     'fragment_retries': 20,
     'skip_unavailable_fragments': True,
     'outtmpl': '/tmp/%(title)s.%(ext)s',
-    'quiet': False,
-    'no_warnings': False,
+}
+
+# إعدادات خاصة للـ Instagram
+YDL_OPTS_IG = {
+    **YDL_OPTS,
+    'socket_timeout': 400,
+    'retries': 30,
+    'fragment_retries': 30,
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
+    },
 }
 
 # إعدادات خاصة للـ Facebook
@@ -116,6 +126,41 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         parse_mode="Markdown"
     )
 
+def download_with_yt_dlp(url, ydl_opts):
+    """تحميل الملف باستخدام yt-dlp"""
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            file_path = ydl.prepare_filename(info)
+            return file_path if os.path.exists(file_path) else None
+    except Exception as e:
+        logger.error(f"yt-dlp error: {str(e)}")
+        return None
+
+def download_with_instagrapi(url):
+    """تحميل من Instagram باستخدام instagrapi"""
+    try:
+        import instagrapi
+        from instagrapi.exceptions import LoginRequired
+        
+        cl = instagrapi.Client()
+        
+        # محاولة التحميل بدون تسجيل دخول
+        if "reel" in url:
+            reel_id = url.split("/reel/")[1].split("/")[0]
+            media = cl.media_info(reel_id)
+            if media.video_url:
+                import requests
+                r = requests.get(media.video_url, timeout=30)
+                file_path = f"/tmp/instagram_reel_{reel_id}.mp4"
+                with open(file_path, "wb") as f:
+                    f.write(r.content)
+                return file_path
+        return None
+    except Exception as e:
+        logger.error(f"instagrapi error: {str(e)}")
+        return None
+
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     url = update.message.text
     user_id = update.effective_user.id
@@ -131,33 +176,41 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text("⏳ جاري التحميل عيوني... ثواني ويكون جاهز!")
     
     try:
-        # اختيار الإعدادات المناسبة
-        if "facebook.com" in url or "fb.watch" in url:
+        file_path = None
+        
+        # اختيار الطريقة المناسبة
+        if "instagram.com" in url:
+            ydl_opts = YDL_OPTS_IG
+        elif "facebook.com" in url or "fb.watch" in url:
             ydl_opts = YDL_OPTS_FB
         else:
             ydl_opts = YDL_OPTS
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            file_path = ydl.prepare_filename(info)
+        # محاولة التحميل مع yt-dlp
+        file_path = download_with_yt_dlp(url, ydl_opts)
+        
+        # إذا فشل yt-dlp و الرابط من Instagram، جرب instagrapi
+        if not file_path and "instagram.com" in url:
+            logger.info("محاولة instagrapi...")
+            file_path = download_with_instagrapi(url)
+        
+        if file_path and os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
             
-            if os.path.exists(file_path):
-                file_size = os.path.getsize(file_path)
-                
-                if file_size > 2 * 1024 * 1024 * 1024:
-                    await update.message.reply_text("❌ الملف كبير جداً! (أكثر من 2GB)")
-                    os.remove(file_path)
-                    return
-                
-                with open(file_path, "rb") as f:
-                    await update.message.reply_video(
-                        video=f,
-                        caption="✅ وتدلل! تم التحميل بنجاح! 🎉"
-                    )
-                user_stats[user_id]["downloads"] += 1
+            if file_size > 2 * 1024 * 1024 * 1024:
+                await update.message.reply_text("❌ الملف كبير جداً! (أكثر من 2GB)")
                 os.remove(file_path)
-            else:
-                await update.message.reply_text("❌ فشل التحميل يا طيب!")
+                return
+            
+            with open(file_path, "rb") as f:
+                await update.message.reply_video(
+                    video=f,
+                    caption="✅ وتدلل! تم التحميل بنجاح! 🎉"
+                )
+            user_stats[user_id]["downloads"] += 1
+            os.remove(file_path)
+        else:
+            await update.message.reply_text("❌ فشل التحميل يا طيب! جرب رابط آخر!")
     except Exception as e:
         error_msg = str(e)[:150]
         logger.error(f"Download error: {error_msg}")
@@ -188,7 +241,7 @@ def main() -> None:
     # إضافة قائمة الأوامر عند البدء
     app.post_init = set_commands
     
-    print("🚀 البوت بدأ يشتغل... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل مع مكتبات متخصصة... بوت مثل الطلقة 🔥")
     app.run_polling()
 
 if __name__ == "__main__":
