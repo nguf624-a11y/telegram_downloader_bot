@@ -6,6 +6,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import yt_dlp
 import subprocess
 import threading
+import shutil
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,17 +33,6 @@ YDL_OPTS = {
     'fragment_retries': 20,
     'skip_unavailable_fragments': True,
     'outtmpl': '/tmp/%(title)s.%(ext)s',
-}
-
-# إعدادات خاصة للـ Instagram
-YDL_OPTS_IG = {
-    **YDL_OPTS,
-    'socket_timeout': 400,
-    'retries': 30,
-    'fragment_retries': 30,
-    'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
-    },
 }
 
 # إعدادات خاصة للـ Facebook
@@ -126,6 +116,52 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         parse_mode="Markdown"
     )
 
+def download_with_instaloader(url):
+    """تحميل من Instagram باستخدام instaloader"""
+    try:
+        import instaloader
+        
+        loader = instaloader.Instaloader(
+            quiet=False,
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        )
+        
+        # استخراج معرّف الـ post
+        if "reel" in url or "p/" in url:
+            post_id = url.split("/")[-2]
+            
+            # إنشاء مجلد مؤقت
+            temp_dir = f"/tmp/insta_{post_id}"
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            # تحميل الـ post
+            post = instaloader.Post.from_shortcode(loader.context, post_id)
+            
+            # حفظ الفيديو
+            loader.dirname_pattern = temp_dir
+            loader.download_post(post, target=temp_dir)
+            
+            # البحث عن الملف المحمل
+            for root, dirs, files in os.walk(temp_dir):
+                for file in files:
+                    if file.endswith(('.mp4', '.jpg', '.png')):
+                        file_path = os.path.join(root, file)
+                        # نسخ الملف إلى /tmp
+                        new_path = f"/tmp/instagram_{post_id}.{file.split('.')[-1]}"
+                        shutil.copy(file_path, new_path)
+                        # حذف المجلد المؤقت
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+                        return new_path
+        
+        # حذف المجلد المؤقت إذا لم نجد شيء
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        return None
+    except Exception as e:
+        logger.error(f"instaloader error: {str(e)}")
+        return None
+
 def download_with_yt_dlp(url, ydl_opts):
     """تحميل الملف باستخدام yt-dlp"""
     try:
@@ -135,30 +171,6 @@ def download_with_yt_dlp(url, ydl_opts):
             return file_path if os.path.exists(file_path) else None
     except Exception as e:
         logger.error(f"yt-dlp error: {str(e)}")
-        return None
-
-def download_with_instagrapi(url):
-    """تحميل من Instagram باستخدام instagrapi"""
-    try:
-        import instagrapi
-        from instagrapi.exceptions import LoginRequired
-        
-        cl = instagrapi.Client()
-        
-        # محاولة التحميل بدون تسجيل دخول
-        if "reel" in url:
-            reel_id = url.split("/reel/")[1].split("/")[0]
-            media = cl.media_info(reel_id)
-            if media.video_url:
-                import requests
-                r = requests.get(media.video_url, timeout=30)
-                file_path = f"/tmp/instagram_reel_{reel_id}.mp4"
-                with open(file_path, "wb") as f:
-                    f.write(r.content)
-                return file_path
-        return None
-    except Exception as e:
-        logger.error(f"instagrapi error: {str(e)}")
         return None
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -180,19 +192,18 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         
         # اختيار الطريقة المناسبة
         if "instagram.com" in url:
-            ydl_opts = YDL_OPTS_IG
+            # محاولة instaloader أولاً
+            logger.info("محاولة instaloader...")
+            file_path = download_with_instaloader(url)
+            
+            # إذا فشل، جرب yt-dlp
+            if not file_path:
+                logger.info("محاولة yt-dlp...")
+                file_path = download_with_yt_dlp(url, YDL_OPTS)
         elif "facebook.com" in url or "fb.watch" in url:
-            ydl_opts = YDL_OPTS_FB
+            file_path = download_with_yt_dlp(url, YDL_OPTS_FB)
         else:
-            ydl_opts = YDL_OPTS
-        
-        # محاولة التحميل مع yt-dlp
-        file_path = download_with_yt_dlp(url, ydl_opts)
-        
-        # إذا فشل yt-dlp و الرابط من Instagram، جرب instagrapi
-        if not file_path and "instagram.com" in url:
-            logger.info("محاولة instagrapi...")
-            file_path = download_with_instagrapi(url)
+            file_path = download_with_yt_dlp(url, YDL_OPTS)
         
         if file_path and os.path.exists(file_path):
             file_size = os.path.getsize(file_path)
@@ -241,7 +252,7 @@ def main() -> None:
     # إضافة قائمة الأوامر عند البدء
     app.post_init = set_commands
     
-    print("🚀 البوت بدأ يشتغل مع مكتبات متخصصة... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل مع instaloader... بوت مثل الطلقة 🔥")
     app.run_polling()
 
 if __name__ == "__main__":
