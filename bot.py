@@ -175,11 +175,8 @@ async def set_commands(app: Application) -> None:
     logger.info("✅ تم إضافة قائمة الأوامر")
 
 def main() -> None:
-    # إعدادات البروكسي MTProto
-    proxy_url = "socks5://sg.tg.toggle.org:443"
-    
-    # إنشاء التطبيق مع البروكسي
-    app = Application.builder().token(BOT_TOKEN).proxy_url(proxy_url).build()
+    # إنشاء التطبيق
+    app = Application.builder().token(BOT_TOKEN).build()
     
     # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
@@ -191,7 +188,7 @@ def main() -> None:
     # إضافة قائمة الأوامر عند البدء
     app.post_init = set_commands
     
-    print("🚀 البوت بدأ يشتغل مع قائمة الأوامر... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل... بوت مثل الطلقة 🔥")
     app.run_polling()
 
 if __name__ == "__main__":
