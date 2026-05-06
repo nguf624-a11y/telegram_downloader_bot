@@ -1,12 +1,8 @@
 import logging
 import os
-import asyncio
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
-import requests
-import json
-import shutil
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,9 +43,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "أنا بوت تحميل متطور وموثوق 100%!\n\n"
         "📺 **المنصات المدعومة:**\n"
         "🔴 YouTube\n"
-        "📸 Instagram\n"
         "🎵 TikTok\n"
-        "📘 Facebook\n\n"
+        "👻 Snapchat\n"
+        "𝕏 Twitter/X\n"
+        "🔗 Reddit\n\n"
         "📝 **الاستخدام:**\n"
         "أرسل أي رابط من المنصات فوق وأنا أحمله لك!\n\n"
         "/help - شرح البوت\n"
@@ -62,9 +59,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "📖 **شرح البوت:**\n\n"
         "1️⃣ أرسل أي رابط من:\n"
         "   • YouTube\n"
-        "   • Instagram\n"
         "   • TikTok\n"
-        "   • Facebook\n\n"
+        "   • Snapchat\n"
+        "   • Twitter/X\n"
+        "   • Reddit\n\n"
         "2️⃣ البوت يحمل الملف ويرسله لك\n\n"
         "🔥 **الميزات:**\n"
         "✅ تحميل بأعلى جودة\n"
@@ -79,9 +77,10 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "حبيبي، هذا بوت تحميل متطور وموثوق 100%!\n\n"
         "📺 **المنصات المدعومة:**\n"
         "🔴 YouTube\n"
-        "📸 Instagram\n"
         "🎵 TikTok\n"
-        "📘 Facebook\n\n"
+        "👻 Snapchat\n"
+        "𝕏 Twitter/X\n"
+        "🔗 Reddit\n\n"
         "🌟 **الميزات:**\n"
         "✅ تحميل بأعلى جودة\n"
         "✅ سرعة خرافية\n"
@@ -108,53 +107,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         parse_mode="Markdown"
     )
 
-def download_with_cobalt_api(url):
-    """تحميل باستخدام Cobalt API - للـ Instagram و Facebook و TikTok"""
+def download_with_yt_dlp(url):
+    """تحميل الملف باستخدام yt-dlp - يدعم كل المنصات"""
     try:
-        # استخدام Cobalt API المجانية
-        api_url = "https://api.cobalt.tools/api/json"
-        
-        payload = {
-            "url": url,
-            "vCodec": "h264",
-            "vQuality": "max",
-            "aFormat": "best",
-            "filenamePattern": "basic"
-        }
-        
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
-        
-        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            if data.get("status") == "success" and data.get("url"):
-                # تحميل الملف
-                video_url = data.get("url")
-                video_response = requests.get(video_url, timeout=30, stream=True)
-                
-                if video_response.status_code == 200:
-                    file_path = f"/tmp/cobalt_{url.split('/')[-1][:20]}.mp4"
-                    with open(file_path, "wb") as f:
-                        for chunk in video_response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                    return file_path
-        
-        logger.error(f"Cobalt API error: {response.text}")
-        return None
-    except Exception as e:
-        logger.error(f"Cobalt API exception: {str(e)}")
-        return None
-
-def download_with_yt_dlp(url, ydl_opts):
-    """تحميل الملف باستخدام yt-dlp"""
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
             return file_path if os.path.exists(file_path) else None
@@ -169,30 +125,23 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if user_id not in user_stats:
         user_stats[user_id] = {"downloads": 0}
     
-    valid_domains = ["youtube.com", "youtu.be", "instagram.com", "tiktok.com", "facebook.com", "fb.watch"]
+    # المنصات المدعومة
+    valid_domains = [
+        "youtube.com", "youtu.be",
+        "tiktok.com",
+        "snapchat.com", "snap.com",
+        "twitter.com", "x.com",
+        "reddit.com"
+    ]
+    
     if not any(domain in url for domain in valid_domains):
-        await update.message.reply_text("❌ الرابط ما يشتغل معي يا بعد روحي! 😅")
+        await update.message.reply_text("❌ الرابط ما يشتغل معي يا بعد روحي! 😅\n\nالمنصات المدعومة:\n🔴 YouTube\n🎵 TikTok\n👻 Snapchat\n𝕏 Twitter/X\n🔗 Reddit")
         return
     
     await update.message.reply_text("⏳ جاري التحميل عيوني... ثواني ويكون جاهز!")
     
     try:
-        file_path = None
-        
-        # للـ Instagram و Facebook و TikTok - استخدم Cobalt API
-        if "instagram.com" in url or "facebook.com" in url or "fb.watch" in url or "tiktok.com" in url:
-            logger.info("محاولة Cobalt API...")
-            file_path = download_with_cobalt_api(url)
-        
-        # للـ YouTube - استخدم yt-dlp
-        if not file_path and ("youtube.com" in url or "youtu.be" in url):
-            logger.info("محاولة yt-dlp...")
-            file_path = download_with_yt_dlp(url, YDL_OPTS)
-        
-        # إذا فشل Cobalt، جرب yt-dlp
-        if not file_path:
-            logger.info("محاولة yt-dlp كبديل...")
-            file_path = download_with_yt_dlp(url, YDL_OPTS)
+        file_path = download_with_yt_dlp(url)
         
         if file_path and os.path.exists(file_path):
             file_size = os.path.getsize(file_path)
@@ -241,7 +190,8 @@ def main() -> None:
     # إضافة قائمة الأوامر عند البدء
     app.post_init = set_commands
     
-    print("🚀 البوت بدأ يشتغل مع Cobalt API... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل مع yt-dlp... بوت مثل الطلقة 🔥")
+    print("📺 المنصات المدعومة: YouTube, TikTok, Snapchat, Twitter/X, Reddit")
     app.run_polling()
 
 if __name__ == "__main__":
