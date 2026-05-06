@@ -107,6 +107,37 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         parse_mode="Markdown"
     )
 
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ هذا الأمر للمسؤول فقط!")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ استخدم: /broadcast <الرسالة>")
+        return
+    
+    message = " ".join(context.args)
+    sent_count = 0
+    
+    await update.message.reply_text("⏳ جاري إرسال الرسالة للجميع...")
+    
+    for user_id_to_send in user_stats.keys():
+        try:
+            await context.bot.send_message(
+                chat_id=user_id_to_send,
+                text=f"📢 **رسالة من المسؤول:**\n\n{message}",
+                parse_mode="Markdown"
+            )
+            sent_count += 1
+        except Exception as e:
+            logger.error(f"Failed to send to {user_id_to_send}: {str(e)}")
+    
+    await update.message.reply_text(
+        f"✅ تم إرسال الرسالة لـ {sent_count} مستخدم!",
+        parse_mode="Markdown"
+    )
+
 def download_with_yt_dlp(url):
     """تحميل الملف باستخدام yt-dlp - يدعم كل المنصات"""
     try:
@@ -185,6 +216,7 @@ def main() -> None:
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("about", about_command))
     app.add_handler(CommandHandler("stats", stats_command))
+    app.add_handler(CommandHandler("broadcast", broadcast_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     
     # إضافة قائمة الأوامر عند البدء
