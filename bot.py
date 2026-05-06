@@ -13,7 +13,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ TELEGRAM_BOT_TOKEN غير موجود!")
 
-ADMIN_ID = 5838191316
+ADMIN_ID = 1349568101
 user_stats = {}
 
 # إعدادات محسّنة للسرعة
