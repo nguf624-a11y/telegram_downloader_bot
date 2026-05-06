@@ -4,6 +4,7 @@ import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
+import threading
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,16 +16,31 @@ if not BOT_TOKEN:
 ADMIN_ID = 5838191316
 user_stats = {}
 
+# إعدادات محسّنة للسرعة
 YDL_OPTS = {
-    'format': 'best[ext=mp4]/best',
+    'format': 'best[ext=mp4]/best[ext=webm]/best',
+    'quiet': True,
+    'no_warnings': True,
+    'socket_timeout': 300,
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+    },
+    'retries': 20,
+    'fragment_retries': 20,
+    'skip_unavailable_fragments': True,
+    'outtmpl': '/tmp/%(title)s.%(ext)s',
     'quiet': False,
     'no_warnings': False,
-    'socket_timeout': 120,
-    'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-    'retries': 10,
-    'outtmpl': '/tmp/%(title)s.%(ext)s',
+}
+
+# إعدادات خاصة للـ Facebook
+YDL_OPTS_FB = {
+    **YDL_OPTS,
+    'socket_timeout': 400,
+    'retries': 30,
+    'fragment_retries': 30,
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -115,7 +131,13 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text("⏳ جاري التحميل عيوني... ثواني ويكون جاهز!")
     
     try:
-        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+        # اختيار الإعدادات المناسبة
+        if "facebook.com" in url or "fb.watch" in url:
+            ydl_opts = YDL_OPTS_FB
+        else:
+            ydl_opts = YDL_OPTS
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
             
@@ -137,14 +159,13 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             else:
                 await update.message.reply_text("❌ فشل التحميل يا طيب!")
     except Exception as e:
-        error_msg = str(e)[:100]
+        error_msg = str(e)[:150]
         logger.error(f"Download error: {error_msg}")
         await update.message.reply_text(f"❌ خطأ: {error_msg}")
 
 def main() -> None:
     # إعدادات البروكسي MTProto
     proxy_url = "socks5://sg.tg.toggle.org:443"
-    proxy_key = "e0693ffb16d766aec9a411676f6f676c652e636f6d"
     
     # إنشاء التطبيق مع البروكسي
     app = Application.builder().token(BOT_TOKEN).proxy_url(proxy_url).build()
@@ -156,7 +177,7 @@ def main() -> None:
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     
-    print("🚀 البوت بدأ يشتغل مع البروكسي... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل مع تحسينات السرعة... بوت مثل الطلقة 🔥")
     app.run_polling()
 
 if __name__ == "__main__":
