@@ -94,8 +94,7 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "🕐 24/7 مستقر\n"
         "⚡ سرعة البرق\n"
         "🔄 تحديثات مستمرة\n\n"
-        "👨‍💻 **المطور:** @Abdalraouf\n"
-        "📱 **GitHub:** https://github.com/nguf624-a11y/telegram_downloader_bot",
+        "👨‍💻 **المطور:** @Abdalraouf",
         parse_mode="Markdown"
     )
 
