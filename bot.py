@@ -1,8 +1,8 @@
 import logging
 import os
+import aiohttp
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import yt_dlp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,24 +14,8 @@ if not BOT_TOKEN:
 ADMIN_ID = 1349568101
 user_stats = {}
 
-# إعدادات محسّنة للسرعة
-YDL_OPTS = {
-    'format': 'best[ext=mp4]/best[ext=webm]/best',
-    'quiet': False,
-    'no_warnings': False,
-    'socket_timeout': 300,
-    'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-    },
-    'retries': 20,
-    'fragment_retries': 20,
-    'skip_unavailable_fragments': True,
-    'outtmpl': '/tmp/%(title)s.%(ext)s',
-    'js_runtimes': ['node'],
-    'extractor_args': {'youtube': {'skip': ['hls']}},
-}
+# Cobalt API Endpoint
+COBALT_API = "https://api.cobalt.tools/api/json"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
@@ -91,7 +75,6 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "✅ البوت عراقي منة وبينة 🇮🇶🫠\n"
         "✅ لهجة عراقية أصلية\n"
         "✅ تشغيل 24/7 مستقر\n\n"
-
         "⏰ **ساعات البوت:**\n"
         "🕐 24/7 مستقر\n"
         "⚡ سرعة البرق\n"
@@ -147,15 +130,31 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         parse_mode="Markdown"
     )
 
-def download_with_yt_dlp(url):
-    """تحميل الملف باستخدام yt-dlp - يدعم كل المنصات"""
+async def download_with_cobalt(url):
+    """تحميل الملف باستخدام Cobalt API"""
     try:
-        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
-            info = ydl.extract_info(url, download=True)
-            file_path = ydl.prepare_filename(info)
-            return file_path if os.path.exists(file_path) else None
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "url": url,
+                "downloadMode": "auto",
+                "quality": "max",
+                "isAudioOnly": False,
+                "filenamePattern": "basic"
+            }
+            
+            async with session.post(COBALT_API, json=payload, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("status") == "success" and data.get("url"):
+                        return data.get("url")
+                    else:
+                        logger.error(f"Cobalt error: {data}")
+                        return None
+                else:
+                    logger.error(f"Cobalt API error: {resp.status}")
+                    return None
     except Exception as e:
-        logger.error(f"yt-dlp error: {str(e)}")
+        logger.error(f"Cobalt download error: {str(e)}")
         return None
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -190,36 +189,27 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     )
     
     try:
-        file_path = download_with_yt_dlp(url)
+        # تحميل من Cobalt API
+        download_url = await download_with_cobalt(url)
         
-        if file_path and os.path.exists(file_path):
-            file_size = os.path.getsize(file_path)
-            file_size_mb = file_size / (1024 * 1024)
-            
-            if file_size > 2 * 1024 * 1024 * 1024:
-                await update.message.reply_text("❌ الملف كبير جداً! (أكثر من 2GB)")
-                os.remove(file_path)
-                return
-            
-            # تحديث رسالة التحميل مع الانيميشن النهائي
-            progress_bar = "█" * 10 + "░" * 0
+        if download_url:
+            # تحديث رسالة التحميل
             await loading_msg.edit_text(
                 "⠙ جاري التحميل...\n"
                 "━━━━━━━━━━━━━━━━━━━\n"
-                f"⬇️ [{progress_bar}] 100%\n"
+                "⬇️ [██████████] 100%\n"
                 "━━━━━━━━━━━━━━━━━━━\n"
-                f"📁 الحجم  : {file_size_mb:.1f} MB\n"
+                "📁 الحجم  : تم التحميل\n"
                 "⚡ السرعة : ✅ اكتمل\n"
                 "⏱ المتبقي: 0s"
             )
             
-            with open(file_path, "rb") as f:
-                await update.message.reply_video(
-                    video=f,
-                    caption="✅ وتدلل! تم التحميل بنجاح! 🎉"
-                )
+            # إرسال الملف
+            await update.message.reply_video(
+                video=download_url,
+                caption="✅ وتدلل! تم التحميل بنجاح! 🎉"
+            )
             user_stats[user_id]["downloads"] += 1
-            os.remove(file_path)
         else:
             await loading_msg.edit_text("❌ فشل التحميل يا طيب! جرب رابط آخر!")
     except Exception as e:
@@ -254,7 +244,7 @@ def main() -> None:
     # إضافة قائمة الأوامر عند البدء
     app.post_init = set_commands
     
-    print("🚀 البوت بدأ يشتغل مع yt-dlp... بوت مثل الطلقة 🔥")
+    print("🚀 البوت بدأ يشتغل مع Cobalt API... بوت مثل الطلقة 🔥")
     print("📺 المنصات المدعومة: YouTube, TikTok, Snapchat, Twitter/X, Reddit")
     app.run_polling()
 
