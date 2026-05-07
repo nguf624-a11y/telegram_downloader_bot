@@ -29,6 +29,8 @@ YDL_OPTS = {
     'fragment_retries': 20,
     'skip_unavailable_fragments': True,
     'outtmpl': '/tmp/%(title)s.%(ext)s',
+    'js_runtimes': ['node'],
+    'extractor_args': {'youtube': {'skip': ['hls']}},
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
