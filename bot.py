@@ -84,10 +84,25 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "🌟 **الميزات:**\n"
         "✅ تحميل بأعلى جودة\n"
         "✅ سرعة خرافية\n"
+        "✅ animation للتحميل\n"
+        "✅ إحصائيات مفصلة\n"
         "✅ البوت عراقي منة وبينة 🇮🇶🫠\n"
         "✅ لهجة عراقية أصلية\n"
         "✅ تشغيل 24/7 مستقر\n\n"
-        "👨‍💻 **المطور:** @Abdalraouf",
+        "📦 **التثبيت:**\n"
+        "```\n"
+        "pip install python-telegram-bot yt-dlp\n"
+        "```\n\n"
+        "⚙️ **طريقة الاستخدام:**\n"
+        "1️⃣ احصل على التوكن من @BotFather\n"
+        "2️⃣ شغل البوت: `python bot.py`\n"
+        "3️⃣ استخدم الأوامر: /start, /help, /about\n\n"
+        "⏰ **ساعات البوت:**\n"
+        "🕐 24/7 مستقر\n"
+        "⚡ سرعة البرق\n"
+        "🔄 تحديثات مستمرة\n\n"
+        "👨‍💻 **المطور:** @Abdalraouf\n"
+        "📱 **GitHub:** https://github.com/nguf624-a11y/telegram_downloader_bot",
         parse_mode="Markdown"
     )
 
