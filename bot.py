@@ -169,18 +169,40 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text("❌ الرابط ما يشتغل معي يا بعد روحي! 😅\n\nالمنصات المدعومة:\n🔴 YouTube\n🎵 TikTok\n👻 Snapchat\n𝕏 Twitter/X\n🔗 Reddit")
         return
     
-    await update.message.reply_text("⏳ جاري التحميل عيوني... ثواني ويكون جاهز!")
+    # إرسال رسالة التحميل مع الانيميشن
+    loading_msg = await update.message.reply_text(
+        "⠙ جاري التحميل...\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "⬇️ [░░░░░░░░░░] 0%\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "📁 الحجم  : 0 MB / ? MB\n"
+        "⚡ السرعة : 0 KB/s\n"
+        "⏱ المتبقي: جاري الحساب..."
+    )
     
     try:
         file_path = download_with_yt_dlp(url)
         
         if file_path and os.path.exists(file_path):
             file_size = os.path.getsize(file_path)
+            file_size_mb = file_size / (1024 * 1024)
             
             if file_size > 2 * 1024 * 1024 * 1024:
                 await update.message.reply_text("❌ الملف كبير جداً! (أكثر من 2GB)")
                 os.remove(file_path)
                 return
+            
+            # تحديث رسالة التحميل مع الانيميشن النهائي
+            progress_bar = "█" * 10 + "░" * 0
+            await loading_msg.edit_text(
+                "⠙ جاري التحميل...\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                f"⬇️ [{progress_bar}] 100%\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                f"📁 الحجم  : {file_size_mb:.1f} MB\n"
+                "⚡ السرعة : ✅ اكتمل\n"
+                "⏱ المتبقي: 0s"
+            )
             
             with open(file_path, "rb") as f:
                 await update.message.reply_video(
@@ -190,11 +212,11 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             user_stats[user_id]["downloads"] += 1
             os.remove(file_path)
         else:
-            await update.message.reply_text("❌ فشل التحميل يا طيب! جرب رابط آخر!")
+            await loading_msg.edit_text("❌ فشل التحميل يا طيب! جرب رابط آخر!")
     except Exception as e:
         error_msg = str(e)[:150]
         logger.error(f"Download error: {error_msg}")
-        await update.message.reply_text(f"❌ خطأ: {error_msg}")
+        await loading_msg.edit_text(f"❌ خطأ: {error_msg}")
 
 async def set_commands(app: Application) -> None:
     """إضافة قائمة الأوامر"""
